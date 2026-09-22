@@ -408,13 +408,13 @@ jwglxt.qau.edu.cn/jsxsd/  →  authserver.qau.edu.cn/authserver/login?service=..
 | 切换登录方式 | 用 `$("#login_content").html(passwordhtml)` 重建表单（只在点标签时） |
 
 **结论：倒序不是网页造成的**，出在 **WebView ↔ 输入法** 这条链路上。
-设备环境（来自 bugreport）：
+复现环境（来自一份 Android bugreport，此处已去掉可定位到具体设备的信息）：
 
 | | |
 |---|---|
-| 设备 / 系统 | Xiaomi 15 Pro / **Android 17 (API 37)** / HyperOS `OS4.0.0.14.XOBCNXM` |
-| WebView | **150.0.7871.181** |
-| 输入法 | **搜狗输入法小米版** |
+| 设备 / 系统 | 某国产 ROM 手机 / **Android 17 (API 37)** |
+| WebView | Chromium **150.x** |
+| 输入法 | 该 ROM 定制的第三方中文输入法 |
 
 （之前走的"Android 7 WebView 篡改 locale"那条路是错的 —— 那个 issue 早就修了，
 在 Android 17 + WebView 150 上不适用，这就是 LTR 修复无效的原因。）
@@ -669,3 +669,13 @@ apksigner verify --print-certs qau-timetable-debug.apk
   因此请勿将本 App 对外分发或上架。
 - 请只用自己的账号登录；App 不保存密码、不上传任何数据。
 - 请勿高频请求教务系统，避免给学校服务器造成压力。
+
+---
+
+## 9. 许可
+
+本项目以 **GNU General Public License v3.0** 发布，全文见 [LICENSE](LICENSE)。
+
+需要说明的是：本 App 只是一个**个人使用的课表客户端**，
+通过页面抓取读取使用者本人有权访问的教务数据，不包含、也不提供任何校方数据。
+请遵守学校的信息系统使用规定。
