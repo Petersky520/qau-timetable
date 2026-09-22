@@ -107,19 +107,37 @@ QzTableParser 解析 → Repository 入库 → Room → UI
 
 产物：`app/build/outputs/apk/debug/app-debug.apk`
 
-> 如果通过 `gradle wrapper` 生成 wrapper：`gradle wrapper --gradle-version 8.9`
+### 签名（可选）
 
-### 在 aarch64 Linux 上编译（本仓库当前的环境）
+`release` / `debug` 默认都走同一把正式密钥，口令从项目根目录的
+`keystore.properties` 读取 —— **该文件和 `*.jks` 都不在仓库里**：
+
+```properties
+storeFile=qau-release.jks
+storePassword=……
+keyAlias=……
+keyPassword=……
+```
+
+没有这个文件也能正常编译：`release` 产出未签名的
+`app-release-unsigned.apk`，`debug` 用 AGP 默认调试证书。
+自己出包就用自己的密钥，不要去要作者的。
+
+### 在 aarch64 Linux 上编译（作者当时的环境）
 
 Google **从未发布过 linux-aarch64 的 `aapt2`**（连 9.5.0-alpha 都没有），
-所以 aarch64 主机必须用 QEMU 跑 x86_64 版 aapt2。本仓库已配置好：
+所以 aarch64 主机必须用 QEMU 跑 x86_64 版 aapt2：
 
 - QEMU：`/opt/qemu/usr/bin/qemu-x86_64` + x86_64 sysroot `/opt/x86_64`
 - 包装脚本：`/opt/qau-build/aapt2`
-- `gradle.properties` 中的 `android.aapt2FromMavenOverride=/opt/qau-build/aapt2`
+- 再在 **`~/.gradle/gradle.properties`**（用户级，不要提交）里加一行：
+  `android.aapt2FromMavenOverride=/opt/qau-build/aapt2`
 
-重建这套环境见 `setup-toolchain.sh`。若换机器，请把 `aapt2FromMavenOverride`
-指向你自己的包装脚本，或在 x86_64 机器上删掉这一行。
+> 这一行之所以放在用户级而不是项目级，是因为它是**本机绝对路径**，
+> 提交上去会让别人的构建直接失败。
+
+重建这套环境见 `setup-toolchain.sh`。若换机器，把 `aapt2FromMavenOverride`
+指向你自己的包装脚本即可。
 
 ---
 
