@@ -3,12 +3,13 @@ package cn.edu.qau.timetable.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import cn.edu.qau.timetable.core.Campus
 import cn.edu.qau.timetable.core.PeriodTimes
 import cn.edu.qau.timetable.domain.CourseEvent
+import cn.edu.qau.timetable.ui.motion.rememberEntranceWindow
+import cn.edu.qau.timetable.ui.motion.staggeredAppear
 import java.time.LocalDate
 
 private val WEEKDAY_CN = arrayOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
@@ -32,7 +35,10 @@ private val WEEKDAY_CN = arrayOf("周一", "周二", "周三", "周四", "周五
 private fun EmptyState(title: String, hint: String) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
-            modifier = Modifier.padding(32.dp),
+            modifier = Modifier
+                .padding(32.dp)
+                // 空状态也走同一条入场通道，避免出现"别处都在动、这里硬切"的割裂
+                .staggeredAppear(0),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -67,8 +73,17 @@ fun TodayScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         return
     }
 
+    // 入场窗口：只有开屏后这一小段时间里组合出来的项才播动画，
+    // 避免滚动来回时卡片反复淡入（LazyColumn 会销毁/重建视口外的项）。
+    val entrance = rememberEntranceWindow(todayList.size)
+
     Column(modifier.fillMaxSize()) {
-        Card(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+                .staggeredAppear(0, animate = entrance),
+        ) {
             Column(Modifier.padding(16.dp)) {
                 Text(
                     "${today}  ${WEEKDAY_CN[dow - 1]}",
@@ -85,11 +100,16 @@ fun TodayScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
             EmptyState("今天没课 🎉", "好好休息，或者去图书馆卷一下。")
         } else {
             LazyColumn(
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
+                contentPadding = PaddingValues(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(todayList) { course ->
-                    CourseRow(course, campus)
+                itemsIndexed(todayList) { index, course ->
+                    // 序号 +1：摘要卡已经占了 0 号，课程从下一拍接上
+                    CourseRow(
+                        course,
+                        campus,
+                        modifier = Modifier.staggeredAppear(index + 1, animate = entrance),
+                    )
                 }
             }
         }
@@ -97,8 +117,8 @@ fun TodayScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun CourseRow(course: CourseEvent, campus: Campus) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+private fun CourseRow(course: CourseEvent, campus: Campus, modifier: Modifier = Modifier) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(14.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -137,13 +157,14 @@ fun ExamsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         EmptyState("还没有考试安排", "在「同步」页登录后抓取一次考试安排。")
         return
     }
+    val entrance = rememberEntranceWindow(exams.size)
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
+        contentPadding = PaddingValues(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items(exams) { exam ->
-            Card(Modifier.fillMaxWidth()) {
+        itemsIndexed(exams) { index, exam ->
+            Card(Modifier.fillMaxWidth().staggeredAppear(index, animate = entrance)) {
                 Column(Modifier.padding(14.dp)) {
                     Text(exam.course, style = MaterialTheme.typography.titleSmall)
                     val line1 = listOf(exam.date, exam.time).filter { it.isNotEmpty() }.joinToString("  ")
@@ -171,9 +192,15 @@ fun GradesScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     val weighted = grades.filter { it.credit > 0 && it.score > 0 }
         .sumOf { it.score * it.credit }
     val avg = if (totalCredit > 0) weighted / totalCredit else 0.0
+    val entrance = rememberEntranceWindow(grades.size)
 
     Column(modifier.fillMaxSize()) {
-        Card(Modifier.fillMaxWidth().padding(12.dp)) {
+        Card(
+            Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+                .staggeredAppear(0, animate = entrance),
+        ) {
             Row(Modifier.fillMaxWidth().padding(16.dp)) {
                 Column(Modifier.weight(1f)) {
                     Text("总学分", style = MaterialTheme.typography.labelSmall)
@@ -190,11 +217,11 @@ fun GradesScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
             }
         }
         LazyColumn(
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            items(grades) { g ->
-                Card(Modifier.fillMaxWidth()) {
+            itemsIndexed(grades) { index, g ->
+                Card(Modifier.fillMaxWidth().staggeredAppear(index + 1, animate = entrance)) {
                     Column(Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
@@ -231,13 +258,14 @@ fun ClassroomsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         EmptyState("还没有空闲教室数据", "在「同步」页登录后抓取一次空闲教室。")
         return
     }
+    val entrance = rememberEntranceWindow(rooms.size)
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
+        contentPadding = PaddingValues(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        items(rooms) { r ->
-            Card(Modifier.fillMaxWidth()) {
+        itemsIndexed(rooms) { index, r ->
+            Card(Modifier.fillMaxWidth().staggeredAppear(index, animate = entrance)) {
                 Column(Modifier.padding(12.dp)) {
                     Text(r.room, style = MaterialTheme.typography.titleSmall)
                     val sub = listOf(r.building, r.campus, if (r.capacity > 0) "容纳 ${r.capacity} 人" else "")
