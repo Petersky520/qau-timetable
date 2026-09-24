@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      深色模式下的小组件配色，逐项对应 Theme.kt 里的 DarkColors。
+      系统切到深色时，桌面小组件也跟着变，不再是一块刺眼的白底。
+    -->
+    <color name="widget_surface">#282B25</color>             <!-- surfaceContainerHigh -->
+    <color name="widget_on_surface">#E1E4DB</color>           <!-- onSurface -->
+    <color name="widget_on_surface_variant">#C2C9BD</color>   <!-- onSurfaceVariant -->
+    <color name="widget_accent_container">#145226</color>     <!-- primaryContainer -->
+    <color name="widget_on_accent_container">#B4F2B0</color>  <!-- onPrimaryContainer -->
+    <color name="widget_outline_variant">#424940</color>      <!-- outlineVariant -->
+</resources>

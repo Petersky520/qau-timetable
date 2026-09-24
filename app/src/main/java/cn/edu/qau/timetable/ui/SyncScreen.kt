@@ -69,7 +69,7 @@ private class WebHolder {
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier, onBack: () -> Unit) {
+fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     val appSettings by vm.settings.collectAsState()
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     val webHolder = remember { WebHolder() }
@@ -437,8 +437,6 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier, onBack: () -> U
                         "再点「抓当前页」。",
                     style = MaterialTheme.typography.labelSmall,
                 )
-
-                Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("返回") }
             }
         }
 

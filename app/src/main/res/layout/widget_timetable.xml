@@ -1,31 +1,75 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?><!--
+  桌面小组件布局（Material 3）。
+
+  结构：
+    标题行 —— 左侧标题，右侧「第 N 周」胶囊徽标
+    正文   —— 今日课程（跨节的课合并显示起止时间）
+
+  M3 要点：
+    · 16dp 内边距（M3 的标准间距刻度）
+    · 分层表面色 surfaceContainerHigh，圆角跟随系统小组件半径
+    · 两级文字色：标题用 onSurface，正文用 onSurfaceVariant
+    · 周次做成 primaryContainer 的徽标，而不是塞进标题字符串
+    · 整块可点（由 Provider 绑定点击），不是只有文字能点
+
+  注意：下面三个 TextView 的 android:text 是**占位文本**，有两个用途 ——
+    1. 作为 initialLayout，添加后到首次 onUpdate 之间不至于是一片空白；
+    2. 作为 widget_timetable_info.xml 的 previewLayout，
+       让系统小组件选择器里能直接看到真实排版（tools:text 编译期就被剥掉了，
+       用它的话预览会是一张空卡片）。
+  Provider 每次 render 都会覆盖这三处文本，运行时不会显示这些占位内容。
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_bg"
     android:orientation="vertical"
-    android:padding="12dp">
+    android:padding="16dp">
 
-    <TextView
-        android:id="@+id/widget_title"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="@color/widget_title"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        tools:text="青农课表 · 第 5 周 周三" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/widget_on_surface"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:text="青农课表 · 周三" />
+
+        <TextView
+            android:id="@+id/widget_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/widget_badge_bg"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:paddingStart="10dp"
+            android:paddingTop="3dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="3dp"
+            android:textColor="@color/widget_on_accent_container"
+            android:textSize="11sp"
+            android:text="第 5 周" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/widget_body"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:lineSpacingExtra="3dp"
-        android:textColor="@color/widget_text"
+        android:layout_marginTop="10dp"
+        android:lineSpacingExtra="4dp"
+        android:textColor="@color/widget_on_surface_variant"
         android:textSize="12sp"
-        tools:text="1-2节 高等数学A\n教1-101\n\n3-4节 大学英语\n文2-203" />
+        android:text="1-2节 课程名称&#10;教室  08:00-09:40" />
 
 </LinearLayout>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  Android 12 起系统为桌面小组件定义了统一圆角
+  （system_app_widget_background_radius，通常 28dp）。
+  跟随它，小组件才会和系统/其它 App 的小组件在外观上对齐。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/widget_surface" />
+    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
+</shape>

@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">青农课表</string>
+    <!-- 小组件选择器里显示的说明（Android 12 起生效） -->
+    <string name="widget_description">今日课程一目了然；今天没课时显示最近一次课。</string>
 </resources>

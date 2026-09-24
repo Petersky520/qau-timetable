@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  周次徽标背景：M3 的 primaryContainer 胶囊形。
+  半径取一个大于徽标高度一半的值，渲染时会被钳制成胶囊。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/widget_accent_container" />
+    <corners android:radius="20dp" />
+</shape>

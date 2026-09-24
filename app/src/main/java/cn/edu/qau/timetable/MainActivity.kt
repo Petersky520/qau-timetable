@@ -4,6 +4,7 @@ import android.Manifest
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DateRange
@@ -179,6 +181,10 @@ private fun AppRoot(vm: MainViewModel) {
         }
     }
 
+    // 二级界面（同步 / 设置）打开时，系统返回键 / 返回手势应该回到主界面，
+    // 而不是直接退出 App —— 之前没有这个处理，属于明显不符合预期的地方。
+    BackHandler(enabled = overlay) { overlay = false }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
@@ -186,8 +192,21 @@ private fun AppRoot(vm: MainViewModel) {
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                     titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
+                // 返回键放在左上角（主界面时不显示），符合 Android 的导航习惯。
+                // 之前二级界面只能滚动到底部点「返回」，很容易找不到入口。
+                navigationIcon = {
+                    if (overlay) {
+                        IconButton(onClick = { overlay = false }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "返回",
+                            )
+                        }
+                    }
+                },
                 title = {
                     Text(
                         when {
@@ -235,10 +254,12 @@ private fun AppRoot(vm: MainViewModel) {
     ) { padding ->
         val modifier = Modifier.padding(padding)
         if (overlay) {
+            // 返回统一由 TopAppBar 左上角的箭头 / 系统返回键负责，
+            // 二级界面内部不再放「返回」按钮。
             if (overlayIsSettings) {
-                SettingsScreen(vm, modifier, onBack = { overlay = false })
+                SettingsScreen(vm, modifier)
             } else {
-                SyncScreen(vm, modifier, onBack = { overlay = false })
+                SyncScreen(vm, modifier)
             }
         } else {
             when (tab) {

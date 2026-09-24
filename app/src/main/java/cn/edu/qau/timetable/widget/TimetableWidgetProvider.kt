@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.view.View
 import android.widget.RemoteViews
 import cn.edu.qau.timetable.MainActivity
 import cn.edu.qau.timetable.QauApp
@@ -69,6 +70,7 @@ class TimetableWidgetProvider : AppWidgetProvider() {
             val term = repo.activeTerm()
             if (term == null) {
                 views.setTextViewText(R.id.widget_title, "青农课表")
+                setBadge(views, null)
                 views.setTextViewText(R.id.widget_body, "还没有课表数据\n打开 App 同步一次即可")
                 bindClick(context, views)
                 ids.forEach { manager.updateAppWidget(it, views) }
@@ -84,11 +86,9 @@ class TimetableWidgetProvider : AppWidgetProvider() {
             val week = term.weekOf(today)
             val dow = today.dayOfWeek.value
 
-            val title = buildString {
-                append("青农课表")
-                if (week > 0) append(" · 第 ").append(week).append(" 周")
-                append(" ").append(WEEKDAY[(dow - 1).coerceIn(0, 6)])
-            }
+            // 周次从标题里挪到右上角的徽标，标题只保留「青农课表 · 周三」，
+            // 这样窄小组件时标题不会被挤到省略号。
+            val title = "青农课表 · " + WEEKDAY[(dow - 1).coerceIn(0, 6)]
 
             val todayCourses = if (week > 0) {
                 courses.filter { it.dayOfWeek == dow && it.occursIn(week) }
@@ -116,6 +116,7 @@ class TimetableWidgetProvider : AppWidgetProvider() {
             }
 
             views.setTextViewText(R.id.widget_title, title)
+            setBadge(views, if (week > 0) "第 $week 周" else null)
             views.setTextViewText(R.id.widget_body, body)
             bindClick(context, views)
             ids.forEach { manager.updateAppWidget(it, views) }
@@ -153,6 +154,16 @@ class TimetableWidgetProvider : AppWidgetProvider() {
             return null
         }
 
+        /** 右上角的周次徽标；没有周次（无数据 / 不在学期周次内）时整个隐藏。 */
+        private fun setBadge(views: RemoteViews, text: String?) {
+            if (text.isNullOrEmpty()) {
+                views.setViewVisibility(R.id.widget_badge, View.GONE)
+            } else {
+                views.setViewVisibility(R.id.widget_badge, View.VISIBLE)
+                views.setTextViewText(R.id.widget_badge, text)
+            }
+        }
+
         private fun bindClick(context: Context, views: RemoteViews) {
             val intent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -163,8 +174,9 @@ class TimetableWidgetProvider : AppWidgetProvider() {
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
-            views.setOnClickPendingIntent(R.id.widget_title, pending)
-            views.setOnClickPendingIntent(R.id.widget_body, pending)
+            // 绑在根布局上：整块都能点开 App。
+            // 之前只绑了标题和正文两个 TextView，空白区域点了没反应。
+            views.setOnClickPendingIntent(R.id.widget_root, pending)
         }
     }
 }

@@ -1,7 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#2E7D32</color>
-    <color name="widget_bg">#F2FFFFFF</color>
-    <color name="widget_title">#1B5E20</color>
-    <color name="widget_text">#212121</color>
+
+    <!--
+      桌面小组件的 Material 3 配色。
+
+      取自 App 内置的农大绿 M3 调色板（见 ui/theme/Theme.kt），
+      深色模式的值由 values-night/colors.xml 覆盖。
+
+      说明：小组件走 RemoteViews，拿不到 Compose 的动态取色（Material You），
+      所以这里用固定色值；系统深浅色切换靠 values-night 生效。
+      命名沿用 M3 的语义色名，方便和 Theme.kt 对照。
+    -->
+    <color name="widget_surface">#E5EAE0</color>             <!-- surfaceContainerHigh -->
+    <color name="widget_on_surface">#191D17</color>           <!-- onSurface -->
+    <color name="widget_on_surface_variant">#424940</color>   <!-- onSurfaceVariant -->
+    <color name="widget_accent_container">#B4F2B0</color>     <!-- primaryContainer -->
+    <color name="widget_on_accent_container">#00210A</color>  <!-- onPrimaryContainer -->
+    <color name="widget_outline_variant">#C2C9BD</color>      <!-- outlineVariant -->
 </resources>

@@ -39,7 +39,7 @@ import cn.edu.qau.timetable.util.CrashLogger
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(vm: MainViewModel, modifier: Modifier = Modifier, onBack: () -> Unit) {
+fun SettingsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     val settings by vm.settings.collectAsState()
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
@@ -287,7 +287,5 @@ fun SettingsScreen(vm: MainViewModel, modifier: Modifier = Modifier, onBack: () 
                 )
             }
         }
-
-        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("返回") }
     }
 }
