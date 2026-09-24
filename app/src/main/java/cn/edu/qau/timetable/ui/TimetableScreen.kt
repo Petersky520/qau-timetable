@@ -1,5 +1,16 @@
 package cn.edu.qau.timetable.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,16 +21,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,11 +43,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.edu.qau.timetable.core.Campus
 import cn.edu.qau.timetable.core.PeriodTimes
 import cn.edu.qau.timetable.domain.CourseEvent
+import cn.edu.qau.timetable.ui.motion.QauMotion
+import cn.edu.qau.timetable.ui.motion.motionOf
+import cn.edu.qau.timetable.ui.motion.staggeredAppear
 import cn.edu.qau.timetable.ui.theme.courseColorFor
 
 private val DAY_LABELS = listOf("一", "二", "三", "四", "五", "六", "日")
@@ -47,6 +59,26 @@ private val CELL_HEIGHT = 62.dp
 // 左列除了节号，还要竖排放下 "08:00" / "08:45" 两行时间，
     // 30dp 会把时间挤没，放宽到 38dp（7 个日列各让出约 1dp，可忽略）。
 private val LABEL_WIDTH = 38.dp
+
+/**
+ * 周次切换：整张表按方向横向推走。
+ *
+ * 位移只取屏宽的 1/6 上下 —— 课表是一个"持续存在的对象"在换内容，
+ * 不是换页面，整屏平移反而会让人觉得界面在乱跑。
+ */
+private fun AnimatedContentTransitionScope<Int>.weekSwitch(
+    slide: FiniteAnimationSpec<IntOffset>,
+    slideFast: FiniteAnimationSpec<IntOffset>,
+    fade: FiniteAnimationSpec<Float>,
+    fadeFast: FiniteAnimationSpec<Float>,
+): ContentTransform {
+    val dir = if (targetState >= initialState) 1 else -1
+    return (
+        slideInHorizontally(slide) { w -> dir * (w / 6) } + fadeIn(fade)
+        ).togetherWith(
+        slideOutHorizontally(slideFast) { w -> -dir * (w / 8) } + fadeOut(fadeFast)
+    )
+}
 
 @Composable
 fun TimetableScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
@@ -58,6 +90,11 @@ fun TimetableScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     val realCurrent = vm.currentWeek()
     val week = if (weekOverride > 0) weekOverride else realCurrent.coerceAtLeast(1)
     val campus = term?.toDomain()?.campus ?: settings.campus
+
+    val slideSpec = motionOf(QauMotion.SlideSpatial)
+    val slideFastSpec = motionOf(QauMotion.SlideSpatialFast)
+    val fadeSpec = motionOf(QauMotion.Effects)
+    val fadeFastSpec = motionOf(QauMotion.EffectsFast)
 
     Column(modifier.fillMaxSize()) {
         WeekBar(
@@ -73,7 +110,14 @@ fun TimetableScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         if (term == null || courses.isEmpty()) {
             EmptyTimetable()
         } else {
-            TimetableGrid(courses = courses, week = week, campus = campus)
+            AnimatedContent(
+                targetState = week,
+                transitionSpec = { weekSwitch(slideSpec, slideFastSpec, fadeSpec, fadeFastSpec) },
+                label = "week",
+                modifier = Modifier.fillMaxSize(),
+            ) { w ->
+                TimetableGrid(courses = courses, week = w, campus = campus)
+            }
         }
     }
 }
@@ -88,6 +132,10 @@ private fun WeekBar(
     onNext: () -> Unit,
     onToday: () -> Unit,
 ) {
+    val slideSpec = motionOf(QauMotion.SlideSpatial)
+    val fadeSpec = motionOf(QauMotion.Effects)
+    val weekText = if (hasTerm) "第 $week 周" else "未设置学期"
+
     Surface(tonalElevation = 2.dp) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
@@ -100,10 +148,21 @@ private fun WeekBar(
                 modifier = Modifier.weight(1f),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(
-                    text = if (hasTerm) "第 $week 周" else "未设置学期",
-                    style = MaterialTheme.typography.titleMedium,
-                )
+                // 周数字整块上滚：与顶部标题同一套处理（整高位移 + 进出同速），
+                // 半高位移在 AnimatedContent 的裁剪下会让新旧数字叠在一起。
+                AnimatedContent(
+                    targetState = weekText,
+                    transitionSpec = {
+                        (slideInVertically(slideSpec) { h -> h } + fadeIn(fadeSpec))
+                            .togetherWith(
+                                slideOutVertically(slideSpec) { h -> -h } +
+                                    fadeOut(fadeSpec)
+                            )
+                    },
+                    label = "weekText",
+                ) { text ->
+                    Text(text = text, style = MaterialTheme.typography.titleMedium)
+                }
                 Text(
                     text = if (isCurrent) "本周 · ${campus.label}" else campus.label,
                     style = MaterialTheme.typography.labelSmall,
@@ -120,7 +179,7 @@ private fun WeekBar(
 @Composable
 private fun EmptyTimetable() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Card(modifier = Modifier.padding(24.dp)) {
+        Card(modifier = Modifier.padding(24.dp).staggeredAppear(0)) {
             Column(
                 modifier = Modifier.padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -250,7 +309,13 @@ private fun TimetableGrid(courses: List<CourseEvent>, week: Int, campus: Campus)
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(CELL_HEIGHT * span)
-                                    .padding(1.dp),
+                                    .padding(1.dp)
+                                    // 错落入场：按「节次 + 天」取序号形成一道斜向的波。
+                                    // key 用周次 —— 换周时整张表是新内容，应该重新入场。
+                                    .staggeredAppear(
+                                        index = (period - 1) + (day - 1),
+                                        key = week,
+                                    ),
                             )
                             period += span
                         } else if (covered.contains(day to period)) {

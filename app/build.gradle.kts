@@ -121,6 +121,10 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
 
+    // 动画：AnimatedContent / Transition / 弹簧规格。
+    // material3 会把它作为传递依赖带进来，但显式声明才不会在依赖变化时突然消失。
+    implementation("androidx.compose.animation:animation")
+
     // Material 3 Expressive 组件（MaterialShapes / ButtonGroup / FloatingToolbar 等）
     // 从 1.4.0 开始提供。
     implementation("androidx.compose.material3:material3:1.4.0")
