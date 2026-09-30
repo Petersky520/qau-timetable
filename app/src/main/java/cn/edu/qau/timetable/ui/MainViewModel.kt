@@ -3,6 +3,7 @@ package cn.edu.qau.timetable.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cn.edu.qau.timetable.core.Campus
+import cn.edu.qau.timetable.core.SilenceMode
 import cn.edu.qau.timetable.data.model.ClassroomEntity
 import cn.edu.qau.timetable.data.model.ExamEntity
 import cn.edu.qau.timetable.data.model.GradeEntity
@@ -12,6 +13,7 @@ import cn.edu.qau.timetable.data.qz.QzPayload
 import cn.edu.qau.timetable.data.repo.TimetableRepository
 import cn.edu.qau.timetable.domain.CourseEvent
 import cn.edu.qau.timetable.notify.ReminderScheduler
+import cn.edu.qau.timetable.notify.SilenceScheduler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -27,6 +29,7 @@ import java.time.LocalDate
 class MainViewModel(
     private val repo: TimetableRepository,
     private val reminders: ReminderScheduler,
+    private val silence: SilenceScheduler,
 ) : ViewModel() {
 
     val settings: StateFlow<AppSettings> =
@@ -107,6 +110,10 @@ class MainViewModel(
 
     fun setTerm(name: String, startMonday: String, totalWeeks: Int) = safeLaunch {
         repo.settings.setTerm(name, startMonday, totalWeeks)
+        // 「第 1 周周一」决定 weekOf() 的结果：改完这一项，
+        // 哪天有课整个变了，提醒和静音都得重排。
+        reminders.reschedule()
+        silence.reschedule()
         _toast.value = "学期已更新"
     }
 
@@ -119,6 +126,23 @@ class MainViewModel(
     fun setUrls(kb: String, exam: String, grade: String, classroom: String) = safeLaunch {
         repo.settings.setUrls(kb, exam, grade, classroom)
         _toast.value = "抓取地址已保存"
+    }
+
+    /**
+     * 上课自动静音。
+     *
+     * 关掉时不能只改设置：如果此刻正被我们静音着，必须立刻还原铃声，
+     * 否则手机会一直哑到下一个闹钟（而闹钟已经被取消了）。
+     */
+    fun setSilence(enabled: Boolean, mode: SilenceMode) = safeLaunch {
+        repo.settings.setSilence(enabled, mode)
+        if (enabled) {
+            silence.reschedule()
+            _toast.value = "已开启上课自动静音（${mode.label}）"
+        } else {
+            silence.stop()
+            _toast.value = "已关闭上课自动静音"
+        }
     }
 
     /** 强制登录页 LTR，规避 WebView 方向漂移导致的输入倒序。 */
@@ -149,6 +173,8 @@ class MainViewModel(
             val msg = if (result.ok) "已导入 ${result.count} 条数据" else result.message
             if (result.ok) {
                 runCatching { reminders.reschedule() }
+                // 新课表意味着新的上课时段，静音窗口要跟着重算
+                runCatching { silence.reschedule() }
             }
             _toast.value = msg
             runCatching { onDone(result.ok, msg) }

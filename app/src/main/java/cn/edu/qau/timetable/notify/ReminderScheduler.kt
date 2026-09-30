@@ -101,11 +101,11 @@ class ReminderScheduler(
             }
         }
 
-        ScheduledAlarms.save(context, scheduled)
+        ScheduledAlarms.save(context, ScheduledAlarms.KEY_REMINDER, scheduled)
     }
 
     private fun cancelAll(alarmManager: AlarmManager) {
-        for (code in ScheduledAlarms.load(context)) {
+        for (code in ScheduledAlarms.load(context, ScheduledAlarms.KEY_REMINDER)) {
             val intent = Intent(context, ReminderReceiver::class.java)
             val pending = PendingIntent.getBroadcast(
                 context, code, intent,
@@ -116,7 +116,7 @@ class ReminderScheduler(
                 pending.cancel()
             }
         }
-        ScheduledAlarms.save(context, emptyList())
+        ScheduledAlarms.save(context, ScheduledAlarms.KEY_REMINDER, emptyList())
     }
 
     private fun requestCodeOf(courseId: Long, date: LocalDate): Int =

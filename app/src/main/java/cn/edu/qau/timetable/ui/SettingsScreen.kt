@@ -1,5 +1,7 @@
 package cn.edu.qau.timetable.ui
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,6 +23,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -34,7 +37,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import cn.edu.qau.timetable.core.Campus
+import cn.edu.qau.timetable.core.SilenceMode
+import cn.edu.qau.timetable.notify.RingerModeController
 import cn.edu.qau.timetable.util.CrashLogger
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,6 +61,9 @@ fun SettingsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     var totalWeeks by remember { mutableStateOf(settings.totalWeeks.toString()) }
     var remindEnabled by remember { mutableStateOf(settings.remindEnabled) }
     var remindMinutes by remember { mutableStateOf(settings.remindMinutesBefore.toString()) }
+    var silenceEnabled by remember { mutableStateOf(settings.silenceEnabled) }
+    var silenceMode by remember { mutableStateOf(settings.silenceMode) }
+    var dndGranted by remember { mutableStateOf(RingerModeController.isGranted(context)) }
     var kbUrl by remember { mutableStateOf(settings.kbUrl) }
     var examUrl by remember { mutableStateOf(settings.examUrl) }
     var gradeUrl by remember { mutableStateOf(settings.gradeUrl) }
@@ -65,10 +76,34 @@ fun SettingsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         totalWeeks = settings.totalWeeks.toString()
         remindEnabled = settings.remindEnabled
         remindMinutes = settings.remindMinutesBefore.toString()
+        silenceEnabled = settings.silenceEnabled
+        silenceMode = settings.silenceMode
         kbUrl = settings.kbUrl
         examUrl = settings.examUrl
         gradeUrl = settings.gradeUrl
         classroomUrl = settings.classroomUrl
+    }
+
+    // 从系统设置页返回时重新读一次权限 —— 否则用户授完权回到 App，
+    // 界面还停在"未授权"，会让人以为没生效。
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                dndGranted = RingerModeController.isGranted(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    fun openDndSettings() {
+        runCatching {
+            context.startActivity(
+                Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
     }
 
     Column(
@@ -186,6 +221,65 @@ fun SettingsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                         minutesBefore = remindMinutes.toIntOrNull()?.coerceIn(1, 120) ?: 15,
                     )
                 }) { Text("保存提醒设置") }
+            }
+        }
+
+        // ---------------------------------------------------------- 上课静音
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("上课自动静音", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "上课时自动把铃声调低，下课后还原成你原来的设置。" +
+                        "中间 15 分钟以内的课间不会恢复，午休和晚饭时间会正常恢复。",
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("开启自动静音", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (dndGranted) {
+                                "已获得勿扰权限。"
+                            } else {
+                                "还缺「勿扰 / 通知策略」权限，需要去系统设置里允许。"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                    Switch(
+                        checked = silenceEnabled,
+                        onCheckedChange = { on ->
+                            // 没有权限就先引导去授权，不要先把开关打开骗用户
+                            if (on && !dndGranted) openDndSettings() else {
+                                silenceEnabled = on
+                                vm.setSilence(on, silenceMode)
+                            }
+                        },
+                    )
+                }
+                if (!dndGranted) {
+                    OutlinedButton(
+                        onClick = { openDndSettings() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("去授予勿扰权限") }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SilenceMode.entries.forEach { m ->
+                        FilterChip(
+                            selected = silenceMode == m,
+                            onClick = {
+                                silenceMode = m
+                                // 已经开着的话立刻用新模式重排，不用再点一次
+                                if (silenceEnabled) vm.setSilence(true, m)
+                            },
+                            label = { Text(m.label) },
+                        )
+                    }
+                }
+                Text(
+                    "「完全静音」连震动都没有；「仅震动」会保留震动。" +
+                        "如果你在上课期间自己调过铃声，下课时不会覆盖你的选择。",
+                    style = MaterialTheme.typography.labelSmall,
+                )
             }
         }
 

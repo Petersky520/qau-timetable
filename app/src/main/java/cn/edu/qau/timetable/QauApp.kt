@@ -7,6 +7,7 @@ import cn.edu.qau.timetable.data.db.AppDatabase
 import cn.edu.qau.timetable.data.prefs.SettingsStore
 import cn.edu.qau.timetable.data.repo.TimetableRepository
 import cn.edu.qau.timetable.notify.ReminderScheduler
+import cn.edu.qau.timetable.notify.SilenceScheduler
 import cn.edu.qau.timetable.util.CrashLogger
 
 class QauApp : Application() {
@@ -35,4 +36,7 @@ class AppContainer(context: Context) {
     val repo: TimetableRepository = TimetableRepository(context.applicationContext, db, settings)
 
     val reminders: ReminderScheduler = ReminderScheduler(context.applicationContext, repo)
+
+    /** 上课自动静音（依赖「通知策略访问权限」）。 */
+    val silence: SilenceScheduler = SilenceScheduler(context.applicationContext, repo)
 }

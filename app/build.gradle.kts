@@ -31,8 +31,8 @@ android {
         applicationId = "cn.edu.qau.timetable"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
         resourceConfigurations += listOf("zh", "en")
     }
 
@@ -117,6 +117,9 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    // LocalLifecycleOwner（设置页从系统权限页返回时重读授权状态）。
+    // 它同时也是 compose-ui 里那个已弃用的同名 API 的新家，显式声明免得跟着传递依赖漂。
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")

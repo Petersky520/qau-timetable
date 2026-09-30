@@ -84,4 +84,7 @@ object PeriodTimes {
 
     /** 该节次的上课时刻（用于提醒）。 */
     fun startOf(campus: Campus, period: Int): LocalTime? = get(campus, period)?.start
+
+    /** 该节次的下课时刻（用于上课静音时段的结束点）。 */
+    fun endOf(campus: Campus, period: Int): LocalTime? = get(campus, period)?.end
 }

@@ -116,6 +116,10 @@ class ReminderReceiver : BroadcastReceiver() {
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val app = context.applicationContext as? cn.edu.qau.timetable.QauApp ?: return
+        // 重启会把闹钟清空。先把可能残留的静音还原掉（关机时正好在上课的话，
+        // 状态标志会留在"已静音"，不处理手机会一直哑着），再重排两套闹钟。
+        runCatching { RingerModeController.restore(context) }
         app.container.reminders.reschedule()
+        app.container.silence.reschedule()
     }
 }

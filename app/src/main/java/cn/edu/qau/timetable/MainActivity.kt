@@ -104,7 +104,7 @@ class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels {
         val container = (application as QauApp).container
         viewModelFactory {
-            initializer { MainViewModel(container.repo, container.reminders) }
+            initializer { MainViewModel(container.repo, container.reminders, container.silence) }
         }
     }
 

@@ -9,6 +9,15 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!--
+      上课自动静音要改系统铃声。从 Android 6.0（API 23）起这是一项受保护的权限：
+      在 manifest 里声明只是必要条件，用户还必须去
+      设置 → 通知 → 勿扰权限（Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS）
+      里手动允许本应用，否则 setRingerMode 不会生效。
+      没授予时 App 会提示并引导过去，功能保持关闭状态。
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+
+    <!--
       青农大教务系统 (jwglxt.qau.edu.cn) 使用的是明文 HTTP，
       因此必须允许 cleartext，否则 WebView 无法加载登录页。
     -->
@@ -45,6 +54,11 @@
 
         <receiver
             android:name=".notify.ReminderReceiver"
+            android:exported="false" />
+
+        <!-- 上课静音的闹钟落点。只用显式 Intent 触发，不需要 intent-filter。 -->
+        <receiver
+            android:name=".notify.SilenceReceiver"
             android:exported="false" />
 
         <receiver

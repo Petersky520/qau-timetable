@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import cn.edu.qau.timetable.core.Campus
+import cn.edu.qau.timetable.core.SilenceMode
 import cn.edu.qau.timetable.data.qz.QzEndpoints
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -24,6 +25,14 @@ data class AppSettings(
     val totalWeeks: Int = 20,
     val remindEnabled: Boolean = false,
     val remindMinutesBefore: Int = 15,
+    /**
+     * 上课自动静音。
+     * 默认**关闭** —— 它会改动系统铃声，必须由用户主动开启，
+     * 而且还需要用户去系统设置里授予「通知策略访问权限」。
+     */
+    val silenceEnabled: Boolean = false,
+    /** 静音期间把铃声调成完全静音还是仅震动。 */
+    val silenceMode: SilenceMode = SilenceMode.SILENT,
     /**
      * 强制登录页为 LTR。
      * 默认**关闭** —— 实测它并不能解决输入倒序，反而多引入一个变量。
@@ -48,6 +57,8 @@ class SettingsStore(private val context: Context) {
             totalWeeks = p[KEY_WEEKS] ?: 20,
             remindEnabled = p[KEY_REMIND] ?: false,
             remindMinutesBefore = p[KEY_REMIND_MIN] ?: 15,
+            silenceEnabled = p[KEY_SILENCE] ?: false,
+            silenceMode = SilenceMode.fromName(p[KEY_SILENCE_MODE]),
             forceLtrInput = p[KEY_FORCE_LTR] ?: false,
             dynamicColor = p[KEY_DYNAMIC_COLOR] ?: true,
             kbUrl = p[KEY_KB_URL] ?: QzEndpoints.TIMETABLE,
@@ -68,6 +79,11 @@ class SettingsStore(private val context: Context) {
     suspend fun setRemind(enabled: Boolean, minutesBefore: Int) = edit {
         it[KEY_REMIND] = enabled
         it[KEY_REMIND_MIN] = minutesBefore
+    }
+
+    suspend fun setSilence(enabled: Boolean, mode: SilenceMode) = edit {
+        it[KEY_SILENCE] = enabled
+        it[KEY_SILENCE_MODE] = mode.name
     }
 
     suspend fun setForceLtr(enabled: Boolean) = edit {
@@ -95,6 +111,8 @@ class SettingsStore(private val context: Context) {
         val KEY_WEEKS = intPreferencesKey("term_weeks")
         val KEY_REMIND = booleanPreferencesKey("remind_enabled")
         val KEY_REMIND_MIN = intPreferencesKey("remind_minutes")
+        val KEY_SILENCE = booleanPreferencesKey("silence_enabled")
+        val KEY_SILENCE_MODE = stringPreferencesKey("silence_mode")
         val KEY_FORCE_LTR = booleanPreferencesKey("force_ltr_input")
         val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val KEY_KB_URL = stringPreferencesKey("url_kb")
