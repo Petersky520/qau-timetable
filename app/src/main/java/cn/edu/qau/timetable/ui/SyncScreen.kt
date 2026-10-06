@@ -25,7 +25,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -76,21 +75,33 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     val clipboard = LocalClipboardManager.current
 
     var target by remember { mutableStateOf(QzEndpoints.Target.TIMETABLE) }
-    var status by remember { mutableStateOf("① 在下方登录青农大教务系统\n② 登录后点「跳转并抓取」") }
+    var status by remember { mutableStateOf("① 在下面填学号 / 密码 / 动态码\n② 点「填入网页」，再到网页里点「登录」") }
     var diagnostics by remember { mutableStateOf("") }
     var pageHtml by remember { mutableStateOf("") }
     var pendingKind by remember { mutableStateOf<String?>(null) }
     var lastRows by remember { mutableStateOf<List<List<String>>>(emptyList()) }
     var lastSpans by remember { mutableStateOf<List<List<Int>>>(emptyList()) }
 
-    // 手动填入：用 App 的原生输入框输入，再注入网页，
-    // 完全绕开 WebView 的输入法链路（用于规避"输入倒序"）。
-    // 默认展开：WebView 的输入法链路在这台机器上有问题，
-    // 用 App 原生输入框再注入网页，是当前唯一稳定可用的登录方式。
-    var showFill by remember { mutableStateOf(true) }
+    // ------------------------------------------------------------------
+    // 登录信息走 App 的原生输入框，再用 JS 注入网页。
+    //
+    // 这不是"保底方案"，而是目前**唯一可用的**登录路径：
+    // 2026-10 在小米 15 Pro（Android 17 / 系统 WebView 153）上实测，
+    // 直接在网页输入框里用输入法打字，字符会被插到位置 0，整串倒过来
+    // （输入 1 2 3，输入框里得到 321）。
+    //
+    // 已用设备实测排除的原因：网页 JS（打字时它不碰输入框）、
+    // RTL 方向（各方向都是 ltr）、unicode-bidi: plaintext 注入、
+    // 输入法品牌（搜狗与小米输入法表现一致）、动效转场的变换。
+    // 机制是 WebView 在输入法提交字符后不回传光标位置，
+    // 属系统 WebView 缺陷，App 侧无法修复 —— 所以只能绕开输入法。
+    // ------------------------------------------------------------------
     var fillU by remember { mutableStateOf("") }
     var fillP by remember { mutableStateOf("") }
     var fillC by remember { mutableStateOf("") }
+
+    // 抓取工具登录之后才用得到，默认收起，把竖向空间让给网页
+    var toolsExpanded by remember { mutableStateOf(false) }
 
     fun urlFor(t: QzEndpoints.Target): String = when (t) {
         QzEndpoints.Target.TIMETABLE -> appSettings.kbUrl
@@ -145,9 +156,6 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
             if (webHolder.destroyed) return
             wv.evaluateJavascript(QzJs.EXTRACT_FN, null)
             wv.evaluateJavascript(QzJs.FIND_LINKS_FN, null)
-            if (appSettings.forceLtrInput) {
-                wv.evaluateJavascript(QzJs.FORCE_LTR_FN, null)
-            }
             val kind = pendingKind
             if (kind != null) {
                 pendingKind = null
@@ -172,8 +180,7 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                             append("  body=").append(obj.optString("bodyDir"))
                             append("  document.dir=").append(obj.optString("docDir")).append('\n')
                             append("lang=").append(obj.optString("lang"))
-                            append("  navigator=").append(obj.optString("navLang"))
-                            append("  LTR修复=").append(obj.optBoolean("ltrFixApplied")).append('\n')
+                            append("  navigator=").append(obj.optString("navLang")).append('\n')
                             val arr = obj.optJSONArray("inputs")
                             if (arr != null) {
                                 for (i in 0 until arr.length()) {
@@ -253,13 +260,11 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         pageHtml = ""
         safeEval(QzJs.EXTRACT_FN, "注入抽取脚本")
         safeEval(QzJs.FIND_LINKS_FN, "注入查找脚本")
-        if (appSettings.forceLtrInput) safeEval(QzJs.FORCE_LTR_FN, "注入 LTR 修复")
         safeEval(QzJs.extractCall(t.key), "抓取")
     }
 
     fun diagnose() {
         status = "正在采集输入方向诊断…"
-        if (appSettings.forceLtrInput) safeEval(QzJs.FORCE_LTR_FN, "注入 LTR 修复")
         safeEval(QzJs.DIAG_FN, "诊断")
     }
 
@@ -300,112 +305,42 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     }
 
     Column(modifier.fillMaxSize()) {
+        // ------------------------------------------------ ① 登录（主路径）
         Card(Modifier.fillMaxWidth().padding(10.dp)) {
             Column(
-                Modifier
-                    .heightIn(max = 420.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(12.dp),
+                Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(status, style = MaterialTheme.typography.bodySmall)
-
-                Text("抓取目标", style = MaterialTheme.typography.labelSmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    QzEndpoints.Target.entries.forEach { t ->
-                        AssistChip(
-                            onClick = { target = t },
-                            label = { Text(t.label) },
-                            leadingIcon = if (target == t) {
-                                { Text("✓") }
-                            } else null,
-                        )
-                    }
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { jumpAndFetch(target) }, modifier = Modifier.weight(1f)) {
-                        Text("跳转并抓取")
-                    }
-                    OutlinedButton(onClick = { fetchCurrent(target) }, modifier = Modifier.weight(1f)) {
-                        Text("抓当前页")
-                    }
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { diagnose() }, modifier = Modifier.weight(1f)) {
-                        Text("诊断输入方向")
-                    }
-                    OutlinedButton(onClick = { exportHtml() }, modifier = Modifier.weight(1f)) {
-                        Text("导出页面HTML")
-                    }
-                }
-
-                // 抓到的原始表格直接丢进剪贴板 —— 反馈问题时粘一下就行
-                if (lastRows.isNotEmpty()) {
-                    Button(
-                        onClick = {
-                            clipboard.setText(
-                                AnnotatedString(QzTableParser.dump(lastRows, lastSpans))
-                            )
-                            status = "已把抓到的原始表格复制到剪贴板，粘贴发出来即可"
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("复制抓取结果（反馈用）") }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("输入方向修复（LTR）", style = MaterialTheme.typography.bodySmall)
-                        Text(
-                            "实测对「输入倒序」无效，默认关闭；留作对照实验。",
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    }
-                    Switch(
-                        checked = appSettings.forceLtrInput,
-                        onCheckedChange = { vm.setForceLtr(it) },
-                    )
-                }
-
-                // ------------------------------------------------ 手动填入
-                OutlinedButton(
-                    onClick = { showFill = !showFill },
+                Text(
+                    "在下面输入（走 App 原生输入框，不经过网页的输入法），" +
+                        "再点「填入网页」；动态码看下面网页里的图片。",
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                OutlinedTextField(
+                    value = fillU, onValueChange = { fillU = it },
+                    label = { Text("学号 / 教工号") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text(if (showFill) "收起手动填入" else "手动填入（绕开输入法，治输入倒序）") }
-
-                if (showFill) {
-                    Text(
-                        "在下面这几个框里输入（走 App 原生输入框），" +
-                            "再点「填入网页」。动态码看网页上的图片。",
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                    OutlinedTextField(
-                        value = fillU, onValueChange = { fillU = it },
-                        label = { Text("学号 / 教工号") }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = fillP, onValueChange = { fillP = it },
-                        label = { Text("密码") }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = fillC, onValueChange = { fillC = it },
-                        label = { Text("动态码 / 验证码") }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { fillNative() }, modifier = Modifier.weight(1f)) {
-                            Text("填入网页")
-                        }
-                        OutlinedButton(
-                            onClick = { fillU = ""; fillP = ""; fillC = "" },
-                            modifier = Modifier.weight(1f),
-                        ) { Text("清空") }
+                )
+                OutlinedTextField(
+                    value = fillP, onValueChange = { fillP = it },
+                    label = { Text("密码") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = fillC, onValueChange = { fillC = it },
+                    label = { Text("动态码 / 验证码") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { fillNative() }, modifier = Modifier.weight(1f)) {
+                        Text("填入网页")
                     }
+                    OutlinedButton(
+                        onClick = { fillU = ""; fillP = ""; fillC = "" },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("清空") }
                 }
-
                 if (diagnostics.isNotEmpty()) {
                     SelectionContainer {
                         Text(
@@ -415,28 +350,6 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                         )
                     }
                 }
-
-                if (pageHtml.isNotEmpty()) {
-                    Text("页面 HTML（长按可复制）", style = MaterialTheme.typography.labelSmall)
-                    SelectionContainer {
-                        Text(
-                            pageHtml,
-                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 200.dp)
-                                .horizontalScroll(rememberScrollState())
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .padding(6.dp),
-                        )
-                    }
-                }
-
-                Text(
-                    "提示：如果自动跳转打不开课表，请手动在下面的网页里点到课表页面，" +
-                        "再点「抓当前页」。",
-                    style = MaterialTheme.typography.labelSmall,
-                )
             }
         }
 
@@ -444,14 +357,15 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxWidth().weight(1f),
             factory = { ctx ->
                 WebView(ctx).apply {
-                    // ---- 与 Chrome 对齐，这一点是"输入倒序"的关键 ----
+                    // ---- viewport：与浏览器对齐 ----
                     //
                     // 页面的 viewport meta 是 width=device-width, initial-scale=1。
-                    // 如果不设 useWideViewPort，WebView 会**忽略这个 meta**，
-                    // 把页面按默认的 980px 宽布局后再整体缩放塞进控件宽度。
-                    // 于是输入框的坐标都落在"缩放空间"里，中文输入法跟随光标
-                    // 组词时算出的插入位置就会错 —— 表现就是输入倒序。
-                    // Chrome 是尊重 viewport meta 的，所以同一个页面在浏览器里正常。
+                    // 不设 useWideViewPort 时 WebView 会忽略这个 meta，按 980px 宽
+                    // 布局后再整体缩放塞进控件宽度。设上是为了让布局与浏览器一致。
+                    //
+                    // 注：早期曾把"输入倒序"归因到这里，2026-10 在设备上实测证实
+                    // **不是** —— 关掉 LTR 注入、关掉全部动画、换成另一个输入法，
+                    // 倒序依旧。真正原因见文件上方关于登录方式的说明。
                     settings.useWideViewPort = true
                     settings.loadWithOverviewMode = true
 
@@ -461,9 +375,6 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
 
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
-                    // 刻意不设 useWideViewPort / loadWithOverviewMode：
-                    // 它们让页面随控件尺寸变化重新缩放，软键盘弹出时
-                    // 会在输入法组词过程中触发重排。
 
                     addJavascriptInterface(QauBridge { json -> deliver(json) }, "QauBridge")
                     webViewClient = object : WebViewClient() {
@@ -478,6 +389,90 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                 }
             },
         )
+
+        // ------------------------------------------------ ③ 抓取工具（登录之后用）
+        Card(Modifier.fillMaxWidth().padding(10.dp)) {
+            Column(
+                Modifier
+                    .heightIn(max = 260.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = { toolsExpanded = !toolsExpanded },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(if (toolsExpanded) "收起抓取工具" else "抓取工具（登录后展开）") }
+
+                if (toolsExpanded) {
+                    Text("抓取目标", style = MaterialTheme.typography.labelSmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        QzEndpoints.Target.entries.forEach { t ->
+                            AssistChip(
+                                onClick = { target = t },
+                                label = { Text(t.label) },
+                                leadingIcon = if (target == t) {
+                                    { Text("✓") }
+                                } else null,
+                            )
+                        }
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { jumpAndFetch(target) }, modifier = Modifier.weight(1f)) {
+                            Text("跳转并抓取")
+                        }
+                        OutlinedButton(onClick = { fetchCurrent(target) }, modifier = Modifier.weight(1f)) {
+                            Text("抓当前页")
+                        }
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { diagnose() }, modifier = Modifier.weight(1f)) {
+                            Text("诊断输入方向")
+                        }
+                        OutlinedButton(onClick = { exportHtml() }, modifier = Modifier.weight(1f)) {
+                            Text("导出页面HTML")
+                        }
+                    }
+
+                    // 抓到的原始表格直接丢进剪贴板 —— 反馈问题时粘一下就行
+                    if (lastRows.isNotEmpty()) {
+                        Button(
+                            onClick = {
+                                clipboard.setText(
+                                    AnnotatedString(QzTableParser.dump(lastRows, lastSpans))
+                                )
+                                status = "已把抓到的原始表格复制到剪贴板，粘贴发出来即可"
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("复制抓取结果（反馈用）") }
+                    }
+
+                    if (pageHtml.isNotEmpty()) {
+                        Text("页面 HTML（长按可复制）", style = MaterialTheme.typography.labelSmall)
+                        SelectionContainer {
+                            Text(
+                                pageHtml,
+                                style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 200.dp)
+                                    .horizontalScroll(rememberScrollState())
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .padding(6.dp),
+                            )
+                        }
+                    }
+
+                    Text(
+                        "提示：如果自动跳转打不开课表，请手动在下面的网页里点到课表页面，" +
+                            "再点「抓当前页」。",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
+        }
     }
 
     DisposableEffect(Unit) {

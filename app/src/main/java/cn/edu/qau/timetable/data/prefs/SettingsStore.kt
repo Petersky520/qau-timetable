@@ -33,12 +33,6 @@ data class AppSettings(
     val silenceEnabled: Boolean = false,
     /** 静音期间把铃声调成完全静音还是仅震动。 */
     val silenceMode: SilenceMode = SilenceMode.SILENT,
-    /**
-     * 强制登录页为 LTR。
-     * 默认**关闭** —— 实测它并不能解决输入倒序，反而多引入一个变量。
-     * 保留开关方便做 A/B 对照。
-     */
-    val forceLtrInput: Boolean = false,
     /** Material You 动态取色（跟随手机壁纸）。 */
     val dynamicColor: Boolean = true,
     val kbUrl: String = QzEndpoints.TIMETABLE,
@@ -59,7 +53,6 @@ class SettingsStore(private val context: Context) {
             remindMinutesBefore = p[KEY_REMIND_MIN] ?: 15,
             silenceEnabled = p[KEY_SILENCE] ?: false,
             silenceMode = SilenceMode.fromName(p[KEY_SILENCE_MODE]),
-            forceLtrInput = p[KEY_FORCE_LTR] ?: false,
             dynamicColor = p[KEY_DYNAMIC_COLOR] ?: true,
             kbUrl = p[KEY_KB_URL] ?: QzEndpoints.TIMETABLE,
             examUrl = p[KEY_EXAM_URL] ?: QzEndpoints.EXAMS,
@@ -86,10 +79,6 @@ class SettingsStore(private val context: Context) {
         it[KEY_SILENCE_MODE] = mode.name
     }
 
-    suspend fun setForceLtr(enabled: Boolean) = edit {
-        it[KEY_FORCE_LTR] = enabled
-    }
-
     suspend fun setDynamicColor(enabled: Boolean) = edit {
         it[KEY_DYNAMIC_COLOR] = enabled
     }
@@ -113,7 +102,6 @@ class SettingsStore(private val context: Context) {
         val KEY_REMIND_MIN = intPreferencesKey("remind_minutes")
         val KEY_SILENCE = booleanPreferencesKey("silence_enabled")
         val KEY_SILENCE_MODE = stringPreferencesKey("silence_mode")
-        val KEY_FORCE_LTR = booleanPreferencesKey("force_ltr_input")
         val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val KEY_KB_URL = stringPreferencesKey("url_kb")
         val KEY_EXAM_URL = stringPreferencesKey("url_exam")

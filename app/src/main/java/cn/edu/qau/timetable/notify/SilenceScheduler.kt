@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import cn.edu.qau.timetable.core.SilenceMode
-import cn.edu.qau.timetable.core.SilenceWindow
 import cn.edu.qau.timetable.data.repo.TimetableRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,8 +23,11 @@ import java.time.ZoneId
  * 在开机 / 改设置 / 导入课表后重排 —— 不一次性排几百个闹钟。
  *
  * 每个静音时段排两个闹钟：开始静音、下课还原。
- * 时段由 [SilenceWindow] 算出（课间的短间隔会被合并，午休/晚饭不会），
+ * 时段由 [SilencePlan] 算出（课间的短间隔会被合并，午休/晚饭不会），
  * 那部分是纯逻辑、有单测覆盖。
+ *
+ * 通知上那个「上课静音」按钮走的是同一个 [SilencePlan]，
+ * 所以"点按钮提前静音"和"到点自动静音"恢复铃声的时刻是一致的。
  */
 class SilenceScheduler(
     private val context: Context,
@@ -71,7 +73,6 @@ class SilenceScheduler(
         if (courses.isEmpty()) return
 
         val today = LocalDate.now()
-        val zone = ZoneId.systemDefault()
         val now = LocalDateTime.now()
         val mode = settings.silenceMode
         val scheduled = ArrayList<Int>()
@@ -80,22 +81,22 @@ class SilenceScheduler(
             val date = today.plusDays(offset.toLong())
             val week = term.weekOf(date)
             if (week <= 0 || week > term.totalWeeks) continue
-            val dow = date.dayOfWeek.value
 
-            val ranges = courses
-                .filter { it.dayOfWeek == dow && it.occursIn(week) }
-                .map { it.startPeriod..it.endPeriod }
-            if (ranges.isEmpty()) continue
-
-            val spans = SilenceWindow.merge(SilenceWindow.of(term.campus, ranges))
-            spans.forEachIndexed { index, span ->
+            val spans = SilencePlan.spansOn(term.campus, courses, date, week)
+            spans.forEach { span ->
                 val startAt = date.atTime(span.start)
-                // 已经开始的时段不补：免得刚打开开关就"突然静音"，
-                // 也免得留下一个没有配对开始、毫无意义的还原闹钟。
-                if (!startAt.isAfter(now)) return@forEachIndexed
+                val endAt = date.atTime(span.end)
+                // 整段都过完了，跳过
+                if (!endAt.isAfter(now)) return@forEach
 
-                scheduleOne(am, scheduled, date, index, false, startAt, mode, zone)
-                scheduleOne(am, scheduled, date, index, true, date.atTime(span.end), mode, zone)
+                // 静音闹钟只给还没开始的时段排：刚打开开关时不该"突然静音"。
+                if (startAt.isAfter(now)) {
+                    scheduleOne(am, scheduled, startAt, mode, restore = false)
+                }
+                // 还原闹钟则**正在进行的时段也要排**。以前这里跟着静音闹钟一起跳过，
+                // 于是任何一次重排（改设置 / 重启 / 重新导入课表）都会把还挂着的还原
+                // 闹钟 cancelAll 掉又没人补上，正在上课的手机就一路哑到下次重排为止。
+                scheduleOne(am, scheduled, endAt, mode, restore = true)
             }
         }
 
@@ -105,21 +106,18 @@ class SilenceScheduler(
     private fun scheduleOne(
         am: AlarmManager,
         scheduled: MutableList<Int>,
-        date: LocalDate,
-        index: Int,
-        restore: Boolean,
         at: LocalDateTime,
         mode: SilenceMode,
-        zone: ZoneId,
+        restore: Boolean,
     ) {
-        val code = codeOf(date, index, restore)
+        val code = SilencePlan.codeOf(at.toLocalDate(), at.toLocalTime())
         val pending = PendingIntent.getBroadcast(
             context,
             code,
             SilenceReceiver.intentFor(context, restore, mode),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val millis = at.atZone(zone).toInstant().toEpochMilli()
+        val millis = at.atZone(zone()).toInstant().toEpochMilli()
         try {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()) {
                 am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pending)
@@ -153,10 +151,5 @@ class SilenceScheduler(
         ScheduledAlarms.save(context, ScheduledAlarms.KEY_SILENCE, emptyList())
     }
 
-    /**
-     * 一天之内 (日期, 第几段, 开始/结束) 唯一即可。
-     * 乘 100 留出足够的段数空间 —— 一天不可能有 50 个静音时段。
-     */
-    private fun codeOf(date: LocalDate, index: Int, restore: Boolean): Int =
-        ((date.toEpochDay() * 100L + index * 2L + if (restore) 1L else 0L) % Int.MAX_VALUE).toInt()
+    private fun zone(): ZoneId = ZoneId.systemDefault()
 }

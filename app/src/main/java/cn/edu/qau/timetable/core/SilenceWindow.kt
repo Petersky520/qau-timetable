@@ -65,4 +65,20 @@ object SilenceWindow {
         out += current
         return out
     }
+
+    /**
+     * [time] 该落在哪一段静音时段上。
+     *
+     * 优先返回**正在进行**的那一段；都不在进行中时返回当天将要开始的第一段；
+     * 当天已经没有课了返回 null。
+     *
+     * 「返回将要开始的第一段」是给通知上的「上课静音」按钮用的：通知在
+     * 上课前 N 分钟弹出，这一刻还不在任何时段里，但静音显然应该持续到
+     * 那节课下课，而不是因为"现在没在上课"就干脆不静音。
+     *
+     * [spans] 需为 [merge] 的输出（按开始时间升序）。
+     */
+    fun spanFor(spans: List<TimeSpan>, time: LocalTime): TimeSpan? =
+        spans.firstOrNull { time >= it.start && time <= it.end }
+            ?: spans.firstOrNull { it.start > time }
 }

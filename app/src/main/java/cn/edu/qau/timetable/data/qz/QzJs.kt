@@ -215,28 +215,13 @@ object QzJs {
 })();
 """.trimIndent()
 
-    /**
-     * 强制页面与表单控件为 LTR。
-     *
-     * 用于规避 Android WebView 的方向漂移：页面一旦被判成 RTL，
-     * `admin123` 这种字母+数字混排会被 bidi 重排成 `123admin`，
-     * 用户看到的就是"输入倒序"。青农大教务系统是中文站（LTR），
-     * 强制 LTR 不会破坏它本来的排版。
-     */
-    val FORCE_LTR_FN: String = """
-(function () {
-  try {
-    if (document.getElementById('__qau_ltr')) { return; }
-    var s = document.createElement('style');
-    s.id = '__qau_ltr';
-    s.textContent =
-      'html,body{direction:ltr !important;}' +
-      'input,textarea{direction:ltr !important;unicode-bidi:plaintext !important;}';
-    var head = document.head || document.getElementsByTagName('head')[0] || document.documentElement;
-    head.appendChild(s);
-  } catch (e) { }
-})();
-""".trimIndent()
+    // 这里原有 FORCE_LTR_FN（给 input/textarea 注入
+    // direction:ltr + unicode-bidi:plaintext），已删除。
+    //
+    // 2026-10 在设备上实测确认它对「输入倒序」无效：把它关掉之后
+    // （输入框的 unicode-bidi 从 plaintext 变回 normal），
+    // 用输入法输入 1 2 3 得到的仍然是 321。注入的 CSS 并不是病因，
+    // 留着只会多一个变量，所以连同设置项一起移除。
 
     /**
      * 诊断：把页面/输入框的真实方向**以及输入框里的真实值**回传。
@@ -246,6 +231,11 @@ object QzJs {
      *   值本身是反的      -> 输入法/InputConnection 的插入位置算错（编辑器侧）
      *   值是对的、显示反了 -> bidi 方向问题（渲染侧）
      * 学号和验证码不是机密，原样回传；密码只回传长度。
+     *
+     * 实测结论（2026-10，小米 15 Pro / Android 17 / 系统 WebView 153）：
+     * 各方向都是 ltr，但输入法的输入会被插到位置 0、整串倒序 ——
+     * 属**编辑器侧**问题，即 WebView 在输入法提交字符后不回传光标位置。
+     * 与输入法品牌无关（搜狗 / 小米输入法表现一致），也与动效无关。
      */
     val DIAG_FN: String = """
 (function () {
@@ -271,7 +261,6 @@ object QzJs {
       docDir: document.dir || '',
       lang: document.documentElement.lang || '',
       navLang: navigator.language,
-      ltrFixApplied: !!document.getElementById('__qau_ltr'),
       valUn: val('un'),
       valCode: val('code'),
       lenPd: len('pd'),

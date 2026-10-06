@@ -68,7 +68,6 @@ class ReminderScheduler(
                 val requestCode = requestCodeOf(course.id, date)
                 val intent = ReminderReceiver.intentFor(
                     context = context,
-                    requestCode = requestCode,
                     courseName = course.name,
                     room = course.room,
                     teacher = course.teacher,

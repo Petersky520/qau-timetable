@@ -61,6 +61,14 @@
             android:name=".notify.SilenceReceiver"
             android:exported="false" />
 
+        <!--
+          提醒通知上「上课静音 / 恢复铃声」按钮的落点。
+          同样只走显式 Intent（按钮的 PendingIntent），不需要 intent-filter。
+        -->
+        <receiver
+            android:name=".notify.SilenceActionReceiver"
+            android:exported="false" />
+
         <receiver
             android:name=".notify.BootReceiver"
             android:exported="true">

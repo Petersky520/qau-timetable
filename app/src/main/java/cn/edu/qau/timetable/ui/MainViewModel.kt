@@ -145,12 +145,6 @@ class MainViewModel(
         }
     }
 
-    /** 强制登录页 LTR，规避 WebView 方向漂移导致的输入倒序。 */
-    fun setForceLtr(enabled: Boolean) = safeLaunch {
-        repo.settings.setForceLtr(enabled)
-        _toast.value = if (enabled) "已开启输入方向修复" else "已关闭输入方向修复"
-    }
-
     /** Material You 动态取色。 */
     fun setDynamicColor(enabled: Boolean) = safeLaunch {
         repo.settings.setDynamicColor(enabled)

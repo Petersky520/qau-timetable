@@ -4,6 +4,7 @@ import cn.edu.qau.timetable.core.Campus
 import cn.edu.qau.timetable.core.SilenceWindow
 import cn.edu.qau.timetable.core.TimeSpan
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalTime
@@ -134,4 +135,56 @@ class SilenceWindowTest {
         val merged = SilenceWindow.merge(spans, maxGapMinutes = 0)
         assertEquals(listOf("08:00-09:40", "09:55-11:35"), merged.texts())
     }
+
+    // ---------------------------------------------------- 通知按钮要静到哪一段
+
+    /** 上午 1-2/3-4 节连堂（课间 15 分钟会被合并），下午 6-7 节。 */
+    private val day = SilenceWindow.merge(
+        SilenceWindow.of(Campus.CHENGYANG, listOf(1..2, 3..4, 6..7))
+    )
+
+    /** 正在上课时点在时段中间：应该持续到这一段结束。 */
+    @Test
+    fun `正在进行的时段优先`() {
+        assertEquals("08:00-11:35", SilenceWindow.spanFor(day, t(8, 30))?.text())
+    }
+
+    /**
+     * 课前点按钮 —— 通知本来就在上课前 N 分钟弹，这一刻还不在任何时段里。
+     * 这是最常见的一种，必须返回**接下来**那一段，而不是 null。
+     */
+    @Test
+    fun `课前点按钮取接下来那一段`() {
+        assertEquals("08:00-11:35", SilenceWindow.spanFor(day, t(7, 45))?.text())
+    }
+
+    /** 课间的 15 分钟本来就并入同一段，落在课间不该被算成"没在上课"。 */
+    @Test
+    fun `课间仍算在上午这一段里`() {
+        assertEquals("08:00-11:35", SilenceWindow.spanFor(day, t(9, 48))?.text())
+    }
+
+    /** 午休（上午已过、下午还有课）：应落到下午那一段。 */
+    @Test
+    fun `午休取下午那一段`() {
+        assertEquals("14:00-15:40", SilenceWindow.spanFor(day, t(12, 30))?.text())
+        assertEquals("14:00-15:40", SilenceWindow.spanFor(day, t(13, 0))?.text())
+    }
+
+    /** 边界：正好落在开始/结束时刻上，算在这一段内。 */
+    @Test
+    fun `边界时刻算在段内`() {
+        assertEquals("08:00-11:35", SilenceWindow.spanFor(day, t(8, 0))?.text())
+        assertEquals("08:00-11:35", SilenceWindow.spanFor(day, t(11, 35))?.text())
+    }
+
+    /** 一天的课都上完了 —— 没有可用时段，调用方要自己去兜底。 */
+    @Test
+    fun `当天课程结束后没有可用时段`() {
+        assertNull(SilenceWindow.spanFor(day, t(16, 0)))
+        assertNull(SilenceWindow.spanFor(day, t(21, 0)))
+        assertNull(SilenceWindow.spanFor(emptyList(), t(10, 0)))
+    }
+
+    private fun TimeSpan.text(): String = "${start.text()}-${end.text()}"
 }

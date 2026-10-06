@@ -31,6 +31,7 @@ internal object RingerModeController {
     private const val KEY_ACTIVE = "active"
     private const val KEY_PREVIOUS = "previous_mode"
     private const val KEY_APPLIED = "applied_mode"
+    private const val KEY_UNTIL = "until"
 
     /** 通知策略访问权限是否已授予。 */
     fun isGranted(context: Context): Boolean = runCatching {
@@ -39,10 +40,29 @@ internal object RingerModeController {
     }.getOrDefault(false)
 
     /**
+     * 当前铃声是否正处于**我们设的**静音中。
+     *
+     * 通知上那个按钮的文案（「上课静音」/「恢复铃声」）就是照它渲染的，
+     * 所以它必须反映真实状态，而不是"我们记不记得自己动过手"。
+     */
+    fun isActive(context: Context): Boolean = prefs(context).getBoolean(KEY_ACTIVE, false)
+
+    /**
+     * 本轮静音预计还会持续到几点（epoch millis）。
+     * 只有从通知按钮手动静音时才有 —— 自动静音是闹钟到点还原，不需要这个值。
+     */
+    fun silencedUntil(context: Context): Long? =
+        if (!isActive(context)) null
+        else prefs(context).getLong(KEY_UNTIL, 0L).takeIf { it > 0L }
+
+    /**
      * 进入静音。返回是否**真的改动了**铃声 ——
      * 已经足够安静、或没权限时返回 false（没有改动就没有需要还原的东西）。
+     *
+     * [untilMillis] 仅用于给通知显示「几点恢复」，不参与还原逻辑 ——
+     * 还原始终由闹钟驱动。
      */
-    fun silence(context: Context, mode: SilenceMode): Boolean {
+    fun silence(context: Context, mode: SilenceMode, untilMillis: Long? = null): Boolean {
         if (!isGranted(context)) return false
         val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
         val target = when (mode) {
@@ -54,11 +74,12 @@ internal object RingerModeController {
 
         val ok = runCatching { am.ringerMode = target }.isSuccess
         if (ok) {
-            prefs(context).edit()
+            val edit = prefs(context).edit()
                 .putBoolean(KEY_ACTIVE, true)
                 .putInt(KEY_PREVIOUS, current)
                 .putInt(KEY_APPLIED, target)
-                .apply()
+            if (untilMillis != null) edit.putLong(KEY_UNTIL, untilMillis)
+            edit.apply()
         }
         return ok
     }

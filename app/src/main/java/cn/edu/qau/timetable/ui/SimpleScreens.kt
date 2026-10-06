@@ -23,7 +23,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cn.edu.qau.timetable.core.Campus
+import cn.edu.qau.timetable.core.GradeRecord
+import cn.edu.qau.timetable.core.GradeStats
+import cn.edu.qau.timetable.core.GradeSummary
 import cn.edu.qau.timetable.core.PeriodTimes
+import cn.edu.qau.timetable.data.model.GradeEntity
 import cn.edu.qau.timetable.domain.CourseEvent
 import cn.edu.qau.timetable.ui.motion.rememberEntranceWindow
 import cn.edu.qau.timetable.ui.motion.staggeredAppear
@@ -180,6 +184,14 @@ fun ExamsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     }
 }
 
+/** 成绩列表里的一行：学期小标题，或一门课。 */
+private sealed interface GradeRow {
+    data class Term(val name: String, val stats: GradeStats) : GradeRow
+    data class Course(val entity: GradeEntity) : GradeRow
+}
+
+private fun creditText(v: Double): String = String.format("%.1f", v)
+
 @Composable
 fun GradesScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     val grades by vm.grades.collectAsState()
@@ -188,65 +200,134 @@ fun GradesScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         return
     }
 
-    val totalCredit = grades.sumOf { it.credit }
-    val weighted = grades.filter { it.credit > 0 && it.score > 0 }
-        .sumOf { it.score * it.credit }
-    val avg = if (totalCredit > 0) weighted / totalCredit else 0.0
-    val entrance = rememberEntranceWindow(grades.size)
+    // 总览：学分绩点和加权平均分是两个指标，分别给出来
+    val stats = GradeSummary.of(grades.map { GradeRecord(it.credit, it.score, it.gpa) })
+
+    // 按学期分组，每个学期各算一份 —— 这样能看出"这学期比上学期进步了没有"
+    val byTerm = grades.groupBy { it.termName }
+    val rows = buildList {
+        GradeSummary.orderTerms(byTerm.keys).forEach { term ->
+            val list = byTerm[term].orEmpty().sortedBy { it.course }
+            add(
+                GradeRow.Term(
+                    name = term.ifBlank { "未标注学期" },
+                    stats = GradeSummary.of(list.map { GradeRecord(it.credit, it.score, it.gpa) }),
+                )
+            )
+            list.forEach { add(GradeRow.Course(it)) }
+        }
+    }
+
+    val entrance = rememberEntranceWindow(rows.size)
 
     Column(modifier.fillMaxSize()) {
+        // ------------------------------------------------ 总览
         Card(
             Modifier
                 .fillMaxWidth()
                 .padding(12.dp)
                 .staggeredAppear(0, animate = entrance),
         ) {
-            Row(Modifier.fillMaxWidth().padding(16.dp)) {
-                Column(Modifier.weight(1f)) {
-                    Text("总学分", style = MaterialTheme.typography.labelSmall)
-                    Text(String.format("%.1f", totalCredit), style = MaterialTheme.typography.titleLarge)
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Column(Modifier.weight(1f)) {
+                        Text("平均学分绩点", style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            if (stats.hasGpa) String.format("%.3f", stats.gpa) else "-",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text("已获学分 / 总学分", style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            "${creditText(stats.earnedCredit)} / ${creditText(stats.totalCredit)}",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
                 }
-                Column(Modifier.weight(1f)) {
-                    Text("加权平均分", style = MaterialTheme.typography.labelSmall)
-                    Text(String.format("%.2f", avg), style = MaterialTheme.typography.titleLarge)
-                }
-                Column(Modifier.weight(1f)) {
-                    Text("门数", style = MaterialTheme.typography.labelSmall)
-                    Text("${grades.size}", style = MaterialTheme.typography.titleLarge)
+                HorizontalDivider()
+                Row(Modifier.fillMaxWidth()) {
+                    GradeStat("加权平均分", if (stats.hasScore) String.format("%.2f", stats.weightedScore) else "-", Modifier.weight(1f))
+                    GradeStat("门数", "${stats.courseCount}", Modifier.weight(1f))
+                    GradeStat("不及格", "${stats.failedCount}", Modifier.weight(1f))
                 }
             }
         }
+
+        // ------------------------------------------------ 按学期明细
         LazyColumn(
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            itemsIndexed(grades) { index, g ->
-                Card(Modifier.fillMaxWidth().staggeredAppear(index + 1, animate = entrance)) {
-                    Column(Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                g.course,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Text(
-                                if (g.score > 0) String.format("%.1f", g.score) else "-",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
-                        HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                        Text(
-                            listOf(
-                                "${g.credit} 学分",
-                                if (g.gpa > 0) "绩点 ${g.gpa}" else "",
-                                g.kind,
-                            ).filter { it.isNotEmpty() }.joinToString(" · "),
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    }
+            itemsIndexed(rows) { index, row ->
+                when (row) {
+                    is GradeRow.Term -> TermHeader(row, index, entrance)
+                    is GradeRow.Course -> GradeCourseCard(row.entity, index, entrance)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun GradeStat(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(label, style = MaterialTheme.typography.labelSmall)
+        Text(value, style = MaterialTheme.typography.titleSmall)
+    }
+}
+
+@Composable
+private fun TermHeader(row: GradeRow.Term, index: Int, animate: Boolean) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp, bottom = 2.dp)
+            .staggeredAppear(index + 1, animate = animate),
+    ) {
+        Text(
+            row.name,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            buildList {
+                add("${creditText(row.stats.totalCredit)} 学分")
+                if (row.stats.hasGpa) add("绩点 ${String.format("%.3f", row.stats.gpa)}")
+                if (row.stats.failedCount > 0) add("挂 ${row.stats.failedCount} 门")
+            }.joinToString(" · "),
+            style = MaterialTheme.typography.labelSmall,
+        )
+    }
+}
+
+@Composable
+private fun GradeCourseCard(g: GradeEntity, index: Int, animate: Boolean) {
+    Card(Modifier.fillMaxWidth().staggeredAppear(index + 1, animate = animate)) {
+        Column(Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    g.course,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    if (g.score > 0) String.format("%.1f", g.score) else "-",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            Text(
+                listOf(
+                    "${creditText(g.credit)} 学分",
+                    if (g.gpa > 0) "绩点 ${g.gpa}" else "",
+                    g.kind,
+                ).filter { it.isNotEmpty() }.joinToString(" · "),
+                style = MaterialTheme.typography.labelSmall,
+            )
         }
     }
 }

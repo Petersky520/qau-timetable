@@ -4,6 +4,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import cn.edu.qau.timetable.core.SilenceMode
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * 上课静音的闹钟落点：开始静音 / 还原铃声。
@@ -22,6 +25,14 @@ class SilenceReceiver : BroadcastReceiver() {
                 context,
                 SilenceMode.fromName(intent.getStringExtra(EXTRA_MODE)),
             )
+        }
+        // 铃声刚被自动改了，通知上那个按钮的文案得跟着变 ——
+        // 否则课前那条写着「上课静音」的通知会一直挂到下课，点下去却是恢复铃声。
+        val appContext = context.applicationContext
+        val pending = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching { ClassNotification.refreshIfShowing(appContext) }
+            pending.finish()
         }
     }
 
