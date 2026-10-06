@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -75,7 +76,7 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     val clipboard = LocalClipboardManager.current
 
     var target by remember { mutableStateOf(QzEndpoints.Target.TIMETABLE) }
-    var status by remember { mutableStateOf("① 在下面填学号 / 密码 / 动态码\n② 点「填入网页」，再到网页里点「登录」") }
+    var status by remember { mutableStateOf("① 在下面填学号 / 密码 / 动态码（不经过网页的输入法）\n② 点「填入网页」，再到网页里点「登录」") }
     var diagnostics by remember { mutableStateOf("") }
     var pageHtml by remember { mutableStateOf("") }
     var pendingKind by remember { mutableStateOf<String?>(null) }
@@ -99,6 +100,9 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     var fillU by remember { mutableStateOf("") }
     var fillP by remember { mutableStateOf("") }
     var fillC by remember { mutableStateOf("") }
+
+    // 填入成功后自动收起登录卡片，把竖向空间让给网页去点「登录」
+    var loginCollapsed by remember { mutableStateOf(false) }
 
     // 抓取工具登录之后才用得到，默认收起，把竖向空间让给网页
     var toolsExpanded by remember { mutableStateOf(false) }
@@ -212,15 +216,28 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     }
 
                     "fill" -> {
-                        val gotUn = if (obj.isNull("un")) "(未填)" else obj.optString("un")
-                        val gotCode = if (obj.isNull("code")) "(未填)" else obj.optString("code")
-                        diagnostics = "回读网页里的真实值（确认注入没被页面改写）：\n" +
-                            "  #un   = $gotUn\n" +
-                            "  #code = $gotCode\n" +
-                            "  #pd   长度 = ${obj.optInt("lenPd", -1)}\n" +
-                            "与你在上面输入的一致 → 说明原生输入框这条路是好的，" +
-                            "直接点网页上的「登录」即可。"
-                        status = "✅ 已填入网页，请点网页上的登录按钮"
+                        // 网页里有没有账号登录的输入框？没有的话多半是还停在「扫码登录」，
+                        // 这时候"填成功"是假的 —— 必须把这件事说出来，不能骗用户。
+                        val found = obj.optBoolean("foundUn") || obj.optBoolean("foundPd") ||
+                            obj.optBoolean("foundCode")
+                        if (!found) {
+                            status = "⚠️ 网页里没找到登录输入框"
+                            diagnostics = "这个登录页默认可能停在「扫码登录」，账号输入框还不存在。\n" +
+                                "请在下面的网页里切到「账号登录」，再点一次「填入网页」。"
+                        } else {
+                            val gotUn = if (obj.isNull("un")) "(没找到)" else obj.optString("un")
+                            val gotCode = if (obj.isNull("code")) "(没找到)" else obj.optString("code")
+                            val matched = gotUn == fillU && gotCode == fillC
+                            status = if (matched) {
+                                "✅ 已填入，请点网页上的「登录」"
+                            } else {
+                                "⚠️ 已填入，但回读的值和输入不一致"
+                            }
+                            diagnostics = "#un=$gotUn  #code=$gotCode  " +
+                                "#pd 长度=${obj.optInt("lenPd", -1)}"
+                            // 填好了就把卡片收起来，把竖向空间让给网页去点「登录」
+                            if (matched) loginCollapsed = true
+                        }
                     }
 
                     else -> {
@@ -288,16 +305,31 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         }
         val js = buildString {
             append("(function(){try{")
-            append("function val(id){var el=document.getElementById(id);return el?String(el.value):null;}")
-            append("function set(id,v){if(!v)return;var el=document.getElementById(id);if(!el)return;")
-            append("el.focus();el.value=v;")
-            append("el.dispatchEvent(new Event('input',{bubbles:true}));")
-            append("el.dispatchEvent(new Event('change',{bubbles:true}));}")
+            append("function el(id){return document.getElementById(id);}")
+            append("function val(id){var e=el(id);return e?String(e.value):null;}")
+            append("function set(id,v){if(!v)return;var e=el(id);if(!e)return;")
+            append("e.focus();e.value=v;")
+            append("e.dispatchEvent(new Event('input',{bubbles:true}));")
+            append("e.dispatchEvent(new Event('change',{bubbles:true}));}")
+            append("function fill(){")
             append("set('un',").append(JSONObject.quote(fillU)).append(");")
             append("set('pd',").append(JSONObject.quote(fillP)).append(");")
-            append("set('code',").append(JSONObject.quote(fillC)).append(");")
-            append("QauBridge.post(JSON.stringify({ok:true,kind:'fill',un:val('un'),code:val('code'),")
-            append("lenPd:(function(){var e=document.getElementById('pd');return e?String(e.value).length:-1;})()}));")
+            append("set('code',").append(JSONObject.quote(fillC)).append(");}")
+            append("function report(){var e=el('pd');")
+            append("QauBridge.post(JSON.stringify({ok:true,kind:'fill',")
+            append("foundUn:!!el('un'),foundPd:!!e,foundCode:!!el('code'),")
+            append("un:val('un'),code:val('code'),lenPd:e?String(e.value).length:-1}));}")
+            // 有的部署默认停在「扫码登录」，账号登录的输入框此时还不存在。
+            // 先点一下那个标签再填，用户就不用自己去网页里切。
+            append("function clickAccountTab(){")
+            append("var all=document.querySelectorAll('a,li,span,div,button');")
+            append("for(var i=0;i<all.length;i++){")
+            append("var t=(all[i].textContent||'').replace(/\\s/g,'');")
+            append("if(t==='账号登录'||t==='密码登录'||t==='账号密码登录'){all[i].click();return true;}}")
+            append("return false;}")
+            append("if(el('un')||el('pd')||el('code')){fill();report();}")
+            append("else if(clickAccountTab()){setTimeout(function(){fill();report();},400);}")
+            append("else{report();}")
             append("}catch(e){QauBridge.post(JSON.stringify({ok:false,error:String(e)}));}})();")
         }
         status = "正在填入网页…"
@@ -311,43 +343,63 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                 Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(status, style = MaterialTheme.typography.bodySmall)
-                Text(
-                    "在下面输入（走 App 原生输入框，不经过网页的输入法），" +
-                        "再点「填入网页」；动态码看下面网页里的图片。",
-                    style = MaterialTheme.typography.labelSmall,
-                )
-                OutlinedTextField(
-                    value = fillU, onValueChange = { fillU = it },
-                    label = { Text("学号 / 教工号") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = fillP, onValueChange = { fillP = it },
-                    label = { Text("密码") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = fillC, onValueChange = { fillC = it },
-                    label = { Text("动态码 / 验证码") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { fillNative() }, modifier = Modifier.weight(1f)) {
-                        Text("填入网页")
-                    }
-                    OutlinedButton(
-                        onClick = { fillU = ""; fillP = ""; fillC = "" },
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        status,
+                        style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.weight(1f),
-                    ) { Text("清空") }
+                    )
+                    if (loginCollapsed) {
+                        TextButton(onClick = { loginCollapsed = false }) { Text("修改") }
+                    }
                 }
-                if (diagnostics.isNotEmpty()) {
-                    SelectionContainer {
-                        Text(
-                            diagnostics,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
+
+                if (loginCollapsed) {
+                    // 收起状态：只留一行摘要，其余全让给网页
+                    Text(
+                        listOf(
+                            "学号 ${fillU}",
+                            "密码 ${fillP.length} 位",
+                            "动态码 ${fillC}",
+                        ).joinToString("  ·  "),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = fillU, onValueChange = { fillU = it },
+                        label = { Text("学号 / 教工号") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = fillP, onValueChange = { fillP = it },
+                        label = { Text("密码") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = fillC, onValueChange = { fillC = it },
+                        label = { Text("动态码 / 验证码") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { fillNative() }, modifier = Modifier.weight(1f)) {
+                            Text("填入网页")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                fillU = ""; fillP = ""; fillC = ""
+                                loginCollapsed = false
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) { Text("清空") }
+                    }
+                    if (diagnostics.isNotEmpty()) {
+                        SelectionContainer {
+                            Text(
+                                diagnostics,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        }
                     }
                 }
             }
