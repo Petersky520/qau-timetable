@@ -11,10 +11,15 @@ import android.widget.RemoteViews
 import cn.edu.qau.timetable.MainActivity
 import cn.edu.qau.timetable.QauApp
 import cn.edu.qau.timetable.R
+import cn.edu.qau.timetable.core.DayOverride
+import cn.edu.qau.timetable.core.DayOverrides
 import cn.edu.qau.timetable.core.PeriodTimes
+import cn.edu.qau.timetable.core.Term
+import cn.edu.qau.timetable.core.UiStyle
 import cn.edu.qau.timetable.domain.CourseEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -64,8 +69,10 @@ class TimetableWidgetProvider : AppWidgetProvider() {
         ) {
             val app = context.applicationContext as? QauApp ?: return
             val repo = app.container.repo
+            val settings = repo.settingsFlow.first()
 
             val views = RemoteViews(context.packageName, R.layout.widget_timetable)
+            applyStyle(context, views, settings.uiStyle)
 
             val term = repo.activeTerm()
             if (term == null) {
@@ -82,15 +89,29 @@ class TimetableWidgetProvider : AppWidgetProvider() {
                 repo.activeTermEntity()?.id ?: -1L
             )
 
+            val overrides = settings.dayOverrides
+
             val today = LocalDate.now()
             val week = term.weekOf(today)
-            val dow = today.dayOfWeek.value
+            val ownDow = today.dayOfWeek.value
+            val override = DayOverrides.of(today, overrides)
+            // 调休：补课日按被借的那天的课表；放假日没有课（dow == null）
+            val dow = DayOverrides.effectiveDayOfWeek(today, overrides)
 
             // 周次从标题里挪到右上角的徽标，标题只保留「青农课表 · 周三」，
             // 这样窄小组件时标题不会被挤到省略号。
-            val title = "青农课表 · " + WEEKDAY[(dow - 1).coerceIn(0, 6)]
+            // 调休日把「补/休」也写进标题，否则用户会以为课表画错了。
+            val title = buildString {
+                append("青农课表 · ").append(WEEKDAY[ownDow - 1])
+                val src = override?.useDayOfWeek
+                when {
+                    override == null -> Unit
+                    override.isHoliday -> append("（放假）")
+                    src != null -> append("（补").append(WEEKDAY[src - 1]).append("）")
+                }
+            }
 
-            val todayCourses = if (week > 0) {
+            val todayCourses = if (week > 0 && dow != null) {
                 courses.filter { it.dayOfWeek == dow && it.occursIn(week) }
                     .sortedBy { it.startPeriod }
             } else {
@@ -101,11 +122,14 @@ class TimetableWidgetProvider : AppWidgetProvider() {
                 week <= 0 ->
                     "不在学期周次内\n（可在设置里调整开学日期）"
 
+                dow == null ->
+                    "今天放假 🎉\n（调休安排里标成了放假日）"
+
                 todayCourses.isNotEmpty() ->
                     todayCourses.joinToString("\n") { line(it, campus) }
 
                 else -> {
-                    val upcoming = nextCourses(courses, week, dow)
+                    val upcoming = nextCourses(term, courses, today, overrides)
                     if (upcoming == null) {
                         "今天没课 🎉"
                     } else {
@@ -136,22 +160,60 @@ class TimetableWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        /** 往后找最近一天有课的。 */
+        /**
+         * 往后找最近一天有课的。
+         *
+         * 按**日期**逐天推进，而不是按星期递推 —— 调休会把某天的课挪到别的星期，
+         * 只有知道具体是哪一天，才算得出那天到底上哪一套课表、是不是放假。
+         */
         private fun nextCourses(
+            term: Term,
             courses: List<CourseEvent>,
-            week: Int,
-            todayDow: Int,
+            from: LocalDate,
+            overrides: List<DayOverride>,
         ): Pair<String, List<CourseEvent>>? {
             for (step in 1..7) {
-                val d = ((todayDow - 1 + step) % 7) + 1
-                val list = courses.filter { it.dayOfWeek == d && it.occursIn(week) }
+                val date = from.plusDays(step.toLong())
+                val week = term.weekOf(date)
+                if (week !in 1..term.totalWeeks) continue
+                val day = DayOverrides.effectiveDayOfWeek(date, overrides) ?: continue
+                val list = courses.filter { it.dayOfWeek == day && it.occursIn(week) }
                     .sortedBy { it.startPeriod }
                 if (list.isNotEmpty()) {
-                    val label = if (step == 1) "明天" else WEEKDAY[d - 1]
+                    val label = if (step == 1) "明天" else WEEKDAY[date.dayOfWeek.value - 1]
                     return label to list
                 }
             }
             return null
+        }
+
+        /**
+         * 按界面风格给小组件上色。
+         *
+         * 小组件走 RemoteViews，读不到 Compose 的 MaterialTheme；而资源限定符
+         * （-night / -v31 …）又没法按 **App 内的设置** 切换。所以这里显式换背景
+         * drawable、改文字颜色 —— 否则用户切到 MIUI X，桌面小组件还是一片农大绿。
+         *
+         * 默认风格什么都不做：布局里的静态资源色本来就是 M3 那套。
+         * 深浅色仍然由 values-night 自动生效，这里只管风格。
+         */
+        private fun applyStyle(context: Context, views: RemoteViews, style: UiStyle) {
+            if (style != UiStyle.MIUIX) return
+            views.setInt(R.id.widget_root, "setBackgroundResource", R.drawable.widget_bg_miuix)
+            views.setInt(
+                R.id.widget_badge,
+                "setBackgroundResource",
+                R.drawable.widget_badge_bg_miuix,
+            )
+            views.setTextColor(R.id.widget_title, context.getColor(R.color.widget_on_surface_miuix))
+            views.setTextColor(
+                R.id.widget_body,
+                context.getColor(R.color.widget_on_surface_variant_miuix),
+            )
+            views.setTextColor(
+                R.id.widget_badge,
+                context.getColor(R.color.widget_on_accent_container_miuix),
+            )
         }
 
         /** 右上角的周次徽标；没有周次（无数据 / 不在学期周次内）时整个隐藏。 */

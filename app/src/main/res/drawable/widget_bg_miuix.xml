@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  小组件背景（MIUI X 风格）：白卡 + 大圆角。
+
+  选 MIUI X 时由 TimetableWidgetProvider 用 setBackgroundResource 换上，
+  默认的农大绿版本见 widget_bg.xml。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/widget_surface_miuix" />
+    <corners android:radius="24dp" />
+</shape>

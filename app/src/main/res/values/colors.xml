@@ -18,4 +18,17 @@
     <color name="widget_accent_container">#B4F2B0</color>     <!-- primaryContainer -->
     <color name="widget_on_accent_container">#00210A</color>  <!-- onPrimaryContainer -->
     <color name="widget_outline_variant">#C2C9BD</color>      <!-- outlineVariant -->
+
+    <!--
+      MIUI X 风格的小组件配色（设置 → 外观 → 界面风格 选 MIUI X 时启用）。
+
+      资源限定符（-night / -v31 …）没法按 App 内的设置切换，所以这几项由
+      TimetableWidgetProvider 在渲染时**显式套用**：换背景 drawable + setTextColor。
+      这里沿用同一套语义色名，逐项对应 Theme.kt 里的 Miuix* 调色板。
+    -->
+    <color name="widget_surface_miuix">#FFFFFF</color>             <!-- 白卡 -->
+    <color name="widget_on_surface_miuix">#141619</color>          <!-- onSurface -->
+    <color name="widget_on_surface_variant_miuix">#6B7280</color>  <!-- onSurfaceVariant -->
+    <color name="widget_accent_container_miuix">#DCE9FF</color>    <!-- primaryContainer -->
+    <color name="widget_on_accent_container_miuix">#00276B</color> <!-- onPrimaryContainer -->
 </resources>

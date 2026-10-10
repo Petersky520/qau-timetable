@@ -9,11 +9,9 @@ import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import cn.edu.qau.timetable.MainActivity
-import cn.edu.qau.timetable.QauApp
 import cn.edu.qau.timetable.R
 import cn.edu.qau.timetable.core.Campus
 import cn.edu.qau.timetable.core.PeriodTimes
-import kotlinx.coroutines.flow.first
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -87,10 +85,9 @@ internal object ClassNotification {
     /** 按**当前真实铃声状态**渲染并投递。 */
     suspend fun post(context: Context, spec: Spec) {
         ReminderReceiver.ensureChannel(context)
-        val withAction = silenceFeatureEnabled(context)
         runCatching {
             NotificationManagerCompat.from(context)
-                .notify(spec.id, build(context, spec, silencedUntilText(context), withAction))
+                .notify(spec.id, build(context, spec, silencedUntilText(context)))
         }
         remember(context, spec)
     }
@@ -109,18 +106,6 @@ internal object ClassNotification {
         post(context, spec)
     }
 
-    /**
-     * 按钮只在**开了上课静音**时才挂上去。
-     *
-     * 这个开关的语义就是「允许 App 动我的铃声」——关掉了就不该再在通知栏里
-     * 递一个改铃声的按钮，更不该顺带催「通知策略访问权限」。
-     * 读不到设置时按"没开"处理：宁可少一个按钮，也不要背着用户改铃声。
-     */
-    private suspend fun silenceFeatureEnabled(context: Context): Boolean {
-        val repo = (context.applicationContext as? QauApp)?.container?.repo ?: return false
-        return runCatching { repo.settingsFlow.first().silenceEnabled }.getOrDefault(false)
-    }
-
     // ---------------------------------------------------------------- 渲染
 
     /** 处于静音中则返回形如 `17:35` 的恢复时刻，否则 null。 */
@@ -131,11 +116,24 @@ internal object ClassNotification {
         }.getOrNull()
     }
 
+    /**
+     * 静音按钮**无条件挂上去**，不再要求先打开「上课自动静音」。
+     *
+     * 早先这里有一道 `silenceEnabled` 的门槛（"这个开关的语义就是允许 App 动我的铃声"），
+     * 但结果是：只想在通知里手动静音一次的人，根本看不到这个按钮 ——
+     * 他得先同意"每节课都自动静音"这个更大的承诺才行。
+     *
+     * 现在两者解耦：
+     *   · 「上课自动静音」开关 = 要不要**自动**改铃声
+     *   · 通知上这个按钮     = 用户**显式**的一次操作，点它本身就是同意
+     *
+     * 还没授「通知策略访问权限」时按钮不做静音，而是跳到系统里那个开关
+     * （文案也跟着变），免得按了没反应还不知道为什么。
+     */
     private fun build(
         context: Context,
         spec: Spec,
         silencedUntil: String?,
-        withSilenceAction: Boolean,
     ): Notification {
         val campus = Campus.fromName(spec.campusLabel)
         val detail = buildString {
@@ -170,9 +168,7 @@ internal object ClassNotification {
             .setOnlyAlertOnce(true)
             .setContentIntent(contentIntent)
 
-        if (withSilenceAction) {
-            builder.addAction(action(context, spec, silenced = silencedUntil != null))
-        }
+        builder.addAction(action(context, spec, silenced = silencedUntil != null))
         return builder.build()
     }
 

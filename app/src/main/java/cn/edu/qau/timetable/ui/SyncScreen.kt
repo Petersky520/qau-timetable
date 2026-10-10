@@ -222,8 +222,8 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                             obj.optBoolean("foundCode")
                         if (!found) {
                             status = "⚠️ 网页里没找到登录输入框"
-                            diagnostics = "这个登录页默认可能停在「扫码登录」，账号输入框还不存在。\n" +
-                                "请在下面的网页里切到「账号登录」，再点一次「填入网页」。"
+                            diagnostics = "网页停在「扫码登录」时没有账号输入框。\n" +
+                                "切到「账号登录」再点一次「填入网页」。"
                         } else {
                             val gotUn = if (obj.isNull("un")) "(没找到)" else obj.optString("un")
                             val gotCode = if (obj.isNull("code")) "(没找到)" else obj.optString("code")

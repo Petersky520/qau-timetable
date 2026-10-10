@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  MIUI X 风格的小组件背景（Android 12 起）。
+  和 widget_bg.xml 一样跟随系统为小组件定义的统一圆角。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/widget_surface_miuix" />
+    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
+</shape>

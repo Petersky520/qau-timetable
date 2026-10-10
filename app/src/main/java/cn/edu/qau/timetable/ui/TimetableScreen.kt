@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -40,6 +41,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,8 +50,12 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.edu.qau.timetable.core.Campus
+import cn.edu.qau.timetable.core.DayOverride
+import cn.edu.qau.timetable.core.DayOverrides
 import cn.edu.qau.timetable.core.PeriodTimes
+import cn.edu.qau.timetable.core.Term
 import cn.edu.qau.timetable.domain.CourseEvent
+import cn.edu.qau.timetable.ui.glass.LocalFloatingBarReserve
 import cn.edu.qau.timetable.ui.motion.QauMotion
 import cn.edu.qau.timetable.ui.motion.motionOf
 import cn.edu.qau.timetable.ui.motion.staggeredAppear
@@ -110,13 +117,45 @@ fun TimetableScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         if (term == null || courses.isEmpty()) {
             EmptyTimetable()
         } else {
-            AnimatedContent(
-                targetState = week,
-                transitionSpec = { weekSwitch(slideSpec, slideFastSpec, fadeSpec, fadeFastSpec) },
-                label = "week",
-                modifier = Modifier.fillMaxSize(),
-            ) { w ->
-                TimetableGrid(courses = courses, week = w, campus = campus)
+            // 左右滑动换周。
+            //
+            // 只认**横向**拖动：detectHorizontalDragGestures 会先等水平方向超过 touch slop
+            // 才接管手势，所以课表本身的上下滚动不受影响 —— 竖向滑动由内层
+            // verticalScroll 消费（11 节要竖着滚），横向的才落到这里。
+            // 两者的判定轴不同，谁先达标谁赢，不需要额外的方向锁。
+            val swipeThreshold = with(LocalDensity.current) { 56.dp.toPx() }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(week) {
+                        var total = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { total = 0f },
+                            onDragCancel = { total = 0f },
+                            onHorizontalDrag = { _, amount -> total += amount },
+                            onDragEnd = {
+                                // 向左滑 = 看下一周，向右滑 = 看上一周（和日历一致）
+                                if (total <= -swipeThreshold) vm.stepWeek(1)
+                                else if (total >= swipeThreshold) vm.stepWeek(-1)
+                                total = 0f
+                            },
+                        )
+                    },
+            ) {
+                AnimatedContent(
+                    targetState = week,
+                    transitionSpec = { weekSwitch(slideSpec, slideFastSpec, fadeSpec, fadeFastSpec) },
+                    label = "week",
+                    modifier = Modifier.fillMaxSize(),
+                ) { w ->
+                    TimetableGrid(
+                        courses = courses,
+                        week = w,
+                        campus = campus,
+                        term = term?.toDomain(),
+                        overrides = settings.dayOverrides,
+                    )
+                }
             }
         }
     }
@@ -199,8 +238,31 @@ private fun EmptyTimetable() {
 }
 
 @Composable
-private fun TimetableGrid(courses: List<CourseEvent>, week: Int, campus: Campus) {
+private fun TimetableGrid(
+    courses: List<CourseEvent>,
+    week: Int,
+    campus: Campus,
+    term: Term?,
+    overrides: List<DayOverride>,
+) {
     val visible = remember(courses, week) { courses.filter { it.occursIn(week) } }
+
+    // 每一列（周一..周日）实际要画**哪一天**的课表：
+    //   平常       -> 就是它自己
+    //   调休补课日 -> 被借的那一天（如周六补周四，周六列画周四的课）
+    //   放假日     -> null，整列空着
+    //
+    // 网格本身只认「星期几」，调休是**日期**层面的概念，所以这里先把日期换算成
+    // 每列的源星期，渲染时按源星期去取课 —— 一行分流，后面所有逻辑都不用动。
+    val columnSource: List<Int?> = remember(term, week, overrides) {
+        (1..7).map { d ->
+            val date = term?.dateOf(week, d)
+            if (date == null) d else DayOverrides.effectiveDayOfWeek(date, overrides)
+        }
+    }
+    val hasOverride: Boolean = remember(term, week, overrides) {
+        term != null && (1..7).any { d -> DayOverrides.of(term.dateOf(week, d), overrides) != null }
+    }
 
     // 渲染行数取「已知节次数」与「数据里出现的最大节次」的较大者 ——
     // 这样即使学校有作息表之外的节次，也不会把课画到格子外面。
@@ -224,14 +286,39 @@ private fun TimetableGrid(courses: List<CourseEvent>, week: Int, campus: Campus)
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState())
+            // 底部让出悬浮底栏那一段，否则最后一节会被底栏挡住滚不出来
+            .padding(bottom = LocalFloatingBarReserve.current),
     ) {
-        // 表头
-        Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically) {
+        // 表头。有调休时多一行小字标出「补四 / 休」，否则用户会以为课表画错了。
+        Row(
+            Modifier.fillMaxWidth().height(if (hasOverride) 44.dp else 28.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Spacer(Modifier.width(LABEL_WIDTH))
-            for (label in DAY_LABELS) {
+            for (day in 1..7) {
+                val src = columnSource[day - 1]
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Text(label, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(DAY_LABELS[day - 1], fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        if (hasOverride) {
+                            val mark = when {
+                                src == null -> "休"
+                                src != day -> "补${DAY_LABELS[src - 1]}"
+                                else -> ""
+                            }
+                            if (mark.isNotEmpty()) {
+                                Text(
+                                    text = mark,
+                                    fontSize = 8.sp,
+                                    lineHeight = 9.sp,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -292,12 +379,13 @@ private fun TimetableGrid(courses: List<CourseEvent>, week: Int, campus: Campus)
                     }
                 }
             }
-            // 周一..周日，各一列
+            // 周一..周日，各一列。每列画的是 columnSource 指定的那一天的课表。
             for (day in 1..7) {
+                val src = columnSource[day - 1]
                 Column(Modifier.weight(1f)) {
                     var period = 1
                     while (period <= periodCount) {
-                        val starts = byStart[day to period]
+                        val starts = if (src == null) null else byStart[src to period]
                         if (starts != null && starts.isNotEmpty()) {
                             val main = starts.first()
                             // 不设上限：4 节的实验课也要能完整撑开
@@ -318,7 +406,7 @@ private fun TimetableGrid(courses: List<CourseEvent>, week: Int, campus: Campus)
                                     ),
                             )
                             period += span
-                        } else if (covered.contains(day to period)) {
+                        } else if (src != null && covered.contains(src to period)) {
                             // 理论上到不了这里（上面已经按 span 跳过），留作兜底
                             period++
                         } else {

@@ -86,6 +86,16 @@ class TimetableRepository(
         return result
     }
 
+    /**
+     * 让桌面小组件重画一次。
+     *
+     * 换界面风格时要用：小组件是 RemoteViews、读不到 Compose 主题，
+     * 颜色是渲染时显式套上去的，不重画就一直停在旧风格上。
+     */
+    fun refreshWidget() {
+        runCatching { TimetableWidgetProvider.refresh(context) }
+    }
+
     private suspend fun ensureTerm(current: AppSettings): TermEntity {
         val name = current.termName.ifBlank { guessTermName() }
         val existing = db.termDao().byName(name)

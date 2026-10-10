@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import cn.edu.qau.timetable.core.DayOverrides
 import cn.edu.qau.timetable.core.PeriodTimes
 import cn.edu.qau.timetable.data.repo.TimetableRepository
 import kotlinx.coroutines.CoroutineScope
@@ -57,7 +58,8 @@ class ReminderScheduler(
             val date = today.plusDays(offset.toLong())
             val week = term.weekOf(date)
             if (week <= 0 || week > term.totalWeeks) continue
-            val dow = date.dayOfWeek.value
+            // 调休：补课日按被借的那天的课表排提醒；放假日不排
+            val dow = DayOverrides.effectiveDayOfWeek(date, settings.dayOverrides) ?: continue
 
             courses.filter { it.dayOfWeek == dow && it.occursIn(week) }.forEach { course ->
                 val start = PeriodTimes.startOf(term.campus, course.startPeriod) ?: return@forEach

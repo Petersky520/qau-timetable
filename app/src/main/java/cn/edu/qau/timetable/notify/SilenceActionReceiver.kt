@@ -86,7 +86,13 @@ class SilenceActionReceiver : BroadcastReceiver() {
             val term = entity.toDomain()
             val week = term.weekOf(today)
             if (week !in 1..term.totalWeeks) return@runCatching null
-            val spans = SilencePlan.spansOn(term.campus, repo.coursesNow(entity.id), today, week)
+            val spans = SilencePlan.spansOn(
+                term.campus,
+                repo.coursesNow(entity.id),
+                today,
+                week,
+                repo.settingsFlow.first().dayOverrides,
+            )
             SilenceWindow.spanFor(spans, LocalTime.now())?.end
         }.getOrNull()
 

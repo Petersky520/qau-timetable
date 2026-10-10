@@ -10,4 +10,11 @@
     <color name="widget_accent_container">#145226</color>     <!-- primaryContainer -->
     <color name="widget_on_accent_container">#B4F2B0</color>  <!-- onPrimaryContainer -->
     <color name="widget_outline_variant">#424940</color>      <!-- outlineVariant -->
+
+    <!-- MIUI X 风格的深色小组件配色，对应 Theme.kt 里的 MiuixDark。 -->
+    <color name="widget_surface_miuix">#1C1F24</color>
+    <color name="widget_on_surface_miuix">#E6E8EB</color>
+    <color name="widget_on_surface_variant_miuix">#A8AEB8</color>
+    <color name="widget_accent_container_miuix">#1B4C99</color>
+    <color name="widget_on_accent_container_miuix">#DCE9FF</color>
 </resources>

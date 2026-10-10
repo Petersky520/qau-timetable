@@ -1,6 +1,8 @@
 package cn.edu.qau.timetable.notify
 
 import cn.edu.qau.timetable.core.Campus
+import cn.edu.qau.timetable.core.DayOverride
+import cn.edu.qau.timetable.core.DayOverrides
 import cn.edu.qau.timetable.core.SilenceWindow
 import cn.edu.qau.timetable.core.TimeSpan
 import cn.edu.qau.timetable.domain.CourseEvent
@@ -22,9 +24,12 @@ internal object SilencePlan {
         courses: List<CourseEvent>,
         date: LocalDate,
         week: Int,
+        /** 调休安排：补课日按被借的那天的课表算，放假日没有时段。 */
+        overrides: List<DayOverride> = emptyList(),
     ): List<TimeSpan> {
+        val day = DayOverrides.effectiveDayOfWeek(date, overrides) ?: return emptyList()
         val ranges = courses
-            .filter { it.dayOfWeek == date.dayOfWeek.value && it.occursIn(week) }
+            .filter { it.dayOfWeek == day && it.occursIn(week) }
             .map { it.startPeriod..it.endPeriod }
         if (ranges.isEmpty()) return emptyList()
         return SilenceWindow.merge(SilenceWindow.of(campus, ranges))

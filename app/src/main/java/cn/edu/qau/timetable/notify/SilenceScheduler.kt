@@ -82,7 +82,7 @@ class SilenceScheduler(
             val week = term.weekOf(date)
             if (week <= 0 || week > term.totalWeeks) continue
 
-            val spans = SilencePlan.spansOn(term.campus, courses, date, week)
+            val spans = SilencePlan.spansOn(term.campus, courses, date, week, settings.dayOverrides)
             spans.forEach { span ->
                 val startAt = date.atTime(span.start)
                 val endAt = date.atTime(span.end)

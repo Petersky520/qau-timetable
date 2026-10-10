@@ -23,7 +23,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cn.edu.qau.timetable.core.Campus
+import cn.edu.qau.timetable.core.DayOverrides
 import cn.edu.qau.timetable.core.GradeRecord
+import cn.edu.qau.timetable.ui.glass.LocalFloatingBarReserve
 import cn.edu.qau.timetable.core.GradeStats
 import cn.edu.qau.timetable.core.GradeSummary
 import cn.edu.qau.timetable.core.PeriodTimes
@@ -61,9 +63,12 @@ fun TodayScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     val campus: Campus = term?.toDomain()?.campus ?: settings.campus
     val week = vm.currentWeek()
     val today = LocalDate.now()
-    val dow = today.dayOfWeek.value
+    val ownDay = today.dayOfWeek.value
+    // 调休：补课日按被借的那天的课表上课，放假日没有课
+    val override = DayOverrides.of(today, settings.dayOverrides)
+    val dow = DayOverrides.effectiveDayOfWeek(today, settings.dayOverrides)
 
-    val todayList: List<CourseEvent> = if (week > 0) {
+    val todayList: List<CourseEvent> = if (week > 0 && dow != null) {
         courses.filter { it.dayOfWeek == dow && it.occursIn(week) }.sortedBy { it.startPeriod }
     } else {
         emptyList()
@@ -75,6 +80,20 @@ fun TodayScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
             "当前日期推算不出第几周。请在「设置」里填写本学期第 1 周的周一日期。",
         )
         return
+    }
+
+    if (dow == null) {
+        EmptyState(
+            "今天放假",
+            "调休安排里把 $today 标成了放假日。",
+        )
+        return
+    }
+
+    val dayLabel = when {
+        override == null -> WEEKDAY_CN[ownDay - 1]
+        override.isHoliday -> "${WEEKDAY_CN[ownDay - 1]} · 放假"
+        else -> "${WEEKDAY_CN[ownDay - 1]} · 补${WEEKDAY_CN[dow - 1]}的课"
     }
 
     // 入场窗口：只有开屏后这一小段时间里组合出来的项才播动画，
@@ -90,7 +109,7 @@ fun TodayScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         ) {
             Column(Modifier.padding(16.dp)) {
                 Text(
-                    "${today}  ${WEEKDAY_CN[dow - 1]}",
+                    "${today}  ${dayLabel}",
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Text(
@@ -104,7 +123,13 @@ fun TodayScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
             EmptyState("今天没课 🎉", "好好休息，或者去图书馆卷一下。")
         } else {
             LazyColumn(
-                contentPadding = PaddingValues(12.dp),
+                contentPadding = PaddingValues(
+                    start = 12.dp,
+                    top = 12.dp,
+                    end = 12.dp,
+                    // 底部多让出悬浮底栏那一段，否则最后一条会被底栏永久挡住
+                    bottom = 12.dp + LocalFloatingBarReserve.current,
+                ),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 itemsIndexed(todayList) { index, course ->
@@ -258,7 +283,12 @@ fun GradesScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
 
         // ------------------------------------------------ 按学期明细
         LazyColumn(
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+            contentPadding = PaddingValues(
+            start = 12.dp,
+            top = 4.dp,
+            end = 12.dp,
+            bottom = 4.dp + LocalFloatingBarReserve.current,
+        ),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             itemsIndexed(rows) { index, row ->

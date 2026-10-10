@@ -3,7 +3,11 @@ package cn.edu.qau.timetable.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cn.edu.qau.timetable.core.Campus
+import cn.edu.qau.timetable.core.DayOverride
+import cn.edu.qau.timetable.core.DayOverrides
+import cn.edu.qau.timetable.core.GlassEffect
 import cn.edu.qau.timetable.core.SilenceMode
+import cn.edu.qau.timetable.core.UiStyle
 import cn.edu.qau.timetable.data.model.ClassroomEntity
 import cn.edu.qau.timetable.data.model.ExamEntity
 import cn.edu.qau.timetable.data.model.GradeEntity
@@ -145,10 +149,38 @@ class MainViewModel(
         }
     }
 
-    /** Material You 动态取色。 */
+    /** 整份替换调休安排。改完必须重排提醒和静音 —— 补课日 / 放假日直接决定哪天上什么课。 */
+    fun setDayOverrides(list: List<DayOverride>) = safeLaunch {
+        repo.settings.setDayOverrides(list)
+        reminders.reschedule()
+        silence.reschedule()
+        _toast.value = if (list.isEmpty()) "已清空调休安排" else "调休安排已更新（${list.size} 条）"
+    }
+
+    /** 悬浮底栏 / 原版底栏切换。 */
+    fun setFloatingBottomBar(enabled: Boolean) = safeLaunch {
+        repo.settings.setFloatingBottomBar(enabled)
+        _toast.value = if (enabled) "已切到悬浮底栏" else "已切回原版底栏"
+    }
+
+    /** 底栏的玻璃效果：无 / 高斯模糊。 */
+    fun setGlassEffect(effect: GlassEffect) = safeLaunch {
+        repo.settings.setGlassEffect(effect)
+        _toast.value = "底栏效果：${effect.label}"
+    }
+
+    /** Material You 动态取色。只对 Material 3 风格生效。 */
     fun setDynamicColor(enabled: Boolean) = safeLaunch {
         repo.settings.setDynamicColor(enabled)
         _toast.value = if (enabled) "已跟随壁纸取色" else "已用回内置配色"
+    }
+
+    /** 界面风格切换：只换配色 / 圆角 / 字体，界面结构不动。 */
+    fun setUiStyle(style: UiStyle) = safeLaunch {
+        repo.settings.setUiStyle(style)
+        // 小组件的颜色是渲染时套上去的，不重画就还停在旧风格
+        repo.refreshWidget()
+        _toast.value = "界面风格：${style.label}"
     }
 
     /** 抓取完成后的入库。 */
@@ -179,9 +211,11 @@ class MainViewModel(
 
     fun todayCourses(week: Int = currentWeek()): List<CourseEvent> {
         if (week <= 0) return emptyList()
-        val dow = LocalDate.now().dayOfWeek.value // 1..7，周一=1
+        // 调休：补课日按被借的那天的课表；放假日直接没有课
+        val day = DayOverrides.effectiveDayOfWeek(LocalDate.now(), settings.value.dayOverrides)
+            ?: return emptyList()
         return courses.value
-            .filter { it.dayOfWeek == dow && it.occursIn(week) }
+            .filter { it.dayOfWeek == day && it.occursIn(week) }
             .sortedBy { it.startPeriod }
     }
 }
