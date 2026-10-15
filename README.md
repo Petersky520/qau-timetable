@@ -1,11 +1,11 @@
-# 青小农（Qxn Timetable）
+# 青农课表（QAU Timetable）
 
 适配**青岛农业大学**教务系统的 Android 课程表 App。
 
 - 技术栈：Kotlin + Jetpack Compose + Room（minSdk 26 / targetSdk 35）
 - 数据来源：**WebView 内登录**强智教务系统 `jwglxt.qau.edu.cn/jsxsd/`，注入 JS 抓取页面后本地解析
 - **不保存密码**，所有数据只存本机
-- 各版本改动见 [CHANGELOG.md](CHANGELOG.md)，安装包见 [Releases](https://github.com/Petersky520/qau-qingxiaonongtools/releases)
+- 各版本改动见 [CHANGELOG.md](CHANGELOG.md)，安装包见 [Releases](https://github.com/Petersky520/qau-timetable/releases)
 
 ---
 
@@ -62,7 +62,7 @@
 ## 2. 架构
 
 ```
-app/src/main/java/com/tiever/qxn/
+app/src/main/java/cn/edu/qau/timetable/
 ├── core/                  纯 Kotlin，无 Android 依赖，可单测
 │   ├── Campus.kt          校区
 │   ├── PeriodTimes.kt     作息时间表（城阳/平度）
@@ -120,7 +120,7 @@ WebView 打开 jwglxt.qau.edu.cn/jsxsd/
       ↓ 注入 QzJs.EXTRACT_FN
       ↓ 把 <table> 摊平成等长二维数组（rowspan/colspan 复制填充，
         带 title 属性的元素编码成 "属性名\u0001值"）
-      ↓ QxnBridge(JavascriptInterface) 回传 JSON
+      ↓ QauBridge(JavascriptInterface) 回传 JSON
 QzTableParser 解析 → Repository 入库 → Room → UI
 ```
 
@@ -148,7 +148,7 @@ QzTableParser 解析 → Repository 入库 → Room → UI
 - 本 App 是**个人自用工具，不是学校官方应用**，与青岛农业大学官方无关。
 - 学校明确说明「微信企业号移动平台」是目前**唯一官方移动端渠道**。
   本 App 未在任何应用商店上架，也不代表校方。
-- 仓库的 [Releases](https://github.com/Petersky520/qau-qingxiaonongtools/releases)
+- 仓库的 [Releases](https://github.com/Petersky520/qau-timetable/releases)
   提供已签名的 APK，仅为自己换机 / 重装时侧载方便。
   该 APK 使用作者自签证书（非应用商店证书），安装时系统可能提示「未知来源」，
   请自行评估后使用；因使用本 App 产生的一切后果由使用者自负。
