@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "QxnTimetable"
+rootProject.name = "QauTimetable"
 include(":app")

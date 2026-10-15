@@ -24,11 +24,11 @@ val keystoreProps = Properties().apply {
 val hasKeystore: Boolean = keystoreProps.getProperty("storeFile") != null
 
 android {
-    namespace = "com.tiever.qxn"
+    namespace = "cn.edu.qau.timetable"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.tiever.qxn"
+        applicationId = "cn.edu.qau.timetable"
         minSdk = 26
         targetSdk = 35
         versionCode = 11
