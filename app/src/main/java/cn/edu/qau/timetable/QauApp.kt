@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.room.Room
 import cn.edu.qau.timetable.data.db.AppDatabase
 import cn.edu.qau.timetable.data.prefs.SettingsStore
+import cn.edu.qau.timetable.data.repo.KaoyanRepository
 import cn.edu.qau.timetable.data.repo.TimetableRepository
 import cn.edu.qau.timetable.notify.ReminderScheduler
 import cn.edu.qau.timetable.notify.SilenceScheduler
@@ -29,11 +30,21 @@ class AppContainer(context: Context) {
         context.applicationContext,
         AppDatabase::class.java,
         "qau_timetable.db",
-    ).fallbackToDestructiveMigration().build()
+    )
+        // v1 -> v2 只 DROP 掉已下线的 `classrooms` 表，课表/成绩/考试原地保留。
+        // v2 -> v3 建考研院校目录表。
+        // 这两条迁移都必须先于 fallbackToDestructiveMigration 命中，
+        // 否则升级等于清库。
+        .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
+        .fallbackToDestructiveMigration()
+        .build()
 
     val settings: SettingsStore = SettingsStore(context.applicationContext)
 
     val repo: TimetableRepository = TimetableRepository(context.applicationContext, db, settings)
+
+    /** 考研模块：院校目录、AI 搜索、收藏。 */
+    val kaoyan: KaoyanRepository = KaoyanRepository(context.applicationContext, db, settings)
 
     val reminders: ReminderScheduler = ReminderScheduler(context.applicationContext, repo)
 

@@ -42,15 +42,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.outlined.Assignment
+import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.DateRange
-import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material3.AlertDialog
@@ -101,7 +101,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import cn.edu.qau.timetable.notify.ReminderReceiver
-import cn.edu.qau.timetable.ui.ClassroomsScreen
 import cn.edu.qau.timetable.ui.ExamsScreen
 import cn.edu.qau.timetable.ui.GradesScreen
 import cn.edu.qau.timetable.ui.MainViewModel
@@ -113,6 +112,7 @@ import cn.edu.qau.timetable.ui.glass.FloatingBarHeight
 import cn.edu.qau.timetable.ui.glass.FloatingBarMargin
 import cn.edu.qau.timetable.ui.glass.GlassPanel
 import cn.edu.qau.timetable.ui.glass.LocalFloatingBarReserve
+import cn.edu.qau.timetable.ui.kaoyan.KaoyanScreen
 import cn.edu.qau.timetable.ui.motion.LocalMotionEnabled
 import cn.edu.qau.timetable.ui.motion.QauMotion
 import cn.edu.qau.timetable.ui.motion.motionOf
@@ -130,7 +130,14 @@ class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels {
         val container = (application as QauApp).container
         viewModelFactory {
-            initializer { MainViewModel(container.repo, container.reminders, container.silence) }
+            initializer {
+                MainViewModel(
+                    repo = container.repo,
+                    reminders = container.reminders,
+                    silence = container.silence,
+                    kaoyan = container.kaoyan,
+                )
+            }
         }
     }
 
@@ -151,8 +158,11 @@ class MainActivity : ComponentActivity() {
             // 这里若硬压一个高度，轻则留白对不上，重则把标签裁掉。
             var barHeight by remember { mutableStateOf(FloatingBarHeight) }
             // 和 AppRoot 里同一套判定：底栏是"浮在内容之上"还是"占位"。
+            // 用的是 effectiveGlassEffect 而不是用户选的 glassEffect ——
+            // 开了性能模式时玻璃被压平成纯色，底栏就不再"浮着"，这一处的留白
+            // 必须和 AppRoot 同源，否则内容会多让或少让一段。
             val barOverlaysContent =
-                settings.floatingBottomBar || settings.glassEffect.blursBackdrop
+                settings.floatingBottomBar || settings.effectiveGlassEffect.blursBackdrop
             QauTheme(
                 style = settings.uiStyle,
                 dynamicColor = settings.dynamicColor,
@@ -189,7 +199,9 @@ private enum class Tab(
     TODAY("今日", Icons.Filled.Today, Icons.Outlined.Today),
     EXAMS("考试", Icons.Filled.Assignment, Icons.Outlined.Assignment),
     GRADES("成绩", Icons.Filled.School, Icons.Outlined.School),
-    ROOMS("教室", Icons.Filled.Place, Icons.Outlined.Place),
+    // 「考研」用书堆图标：School（学士帽）已经被成绩占用，
+    // 两个标签用同一个图标会让人分不清自己在哪一页。
+    KAOYAN("考研", Icons.Filled.AutoStories, Icons.Outlined.AutoStories),
 }
 
 /**
@@ -277,12 +289,27 @@ private fun AppRoot(vm: MainViewModel, onBarHeightChange: (Dp) -> Unit) {
     // 手势小横条占掉的高度。底栏要浮在它上面，滚动内容也要为它留出空白。
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
+    // 实际生效的底栏效果。性能模式在这里把 GAUSSIAN 压平成 NONE：
+    // 用户选的仍是模糊，但渲染走纯色 —— 不录屏、不模糊。
+    val effectiveGlass = settings.effectiveGlassEffect
+
     // 底栏是"浮在内容之上"还是"占位"：
     //   悬浮底栏              → 永远浮着（本来就是要让内容从底下穿过去）
     //   原版底栏 + 有玻璃效果 → 也得浮着，不浮就没有东西可模糊
     //   原版底栏 + 无效果     → 回到 Scaffold 正常占位、完全不透明的那副样子
     val barOverlaysContent =
-        settings.floatingBottomBar || settings.glassEffect.blursBackdrop
+        settings.floatingBottomBar || effectiveGlass.blursBackdrop
+
+    // 🔴 整屏录屏的开关 —— 这是这个 App 里唯一"每帧都在烧 GPU"的地方。
+    //
+    // 只有同时满足下面两条才值得录：
+    //   ① 效果本身要模糊（性能模式 / 用户选「无」时为 false）
+    //   ② 底栏真的在屏幕上（覆盖层推入时底栏是滑出屏幕的）
+    //
+    // 第 ② 条以前没判：同步页 / 设置页是**盖在内容之上**的整页，
+    // 底栏早已不可见，可内容层仍然每帧整屏录一遍再画一遍。
+    // 设置页本身就是一堆 Switch 和输入框，滚起来最吃这个亏。
+    val recordBackdrop = effectiveGlass.blursBackdrop && overlay == Overlay.NONE
 
     // 上次崩溃过就在启动时直接把日志弹出来 —— 用户不用去设置里翻
     var crashText by remember { mutableStateOf<String?>(null) }
@@ -447,11 +474,17 @@ private fun AppRoot(vm: MainViewModel, onBarHeightChange: (Dp) -> Unit) {
             Box(
                 Modifier
                     .fillMaxSize()
-                    // 只有真的要画模糊时，才需要这份"背后内容"的录像。
-                    // 选「无」时底栏本来就不透明，录了也没人看 —— 这一句省掉的是
-                    // 每帧一次整屏录屏，是这套效果里唯一实质性的开销。
+                    // 只有真的要画模糊、且底栏真的可见时，才需要这份"背后内容"的录像。
+                    //
+                    // 这一层以前是无条件挂在内容层上的（只要用户选了高斯模糊），
+                    // 于是**每一帧**都把整屏录进 GraphicsLayer 再画一遍：
+                    // 考研页那种「意向卡 + 分三组结果卡 + 进度条」的重内容，
+                    // 叠上整屏录屏就是用户报的「点进考研掉帧比较严重」。
+                    //
+                    // 现在两个降级条件（见上面 recordBackdrop 的说明）任一成立就整段跳过，
+                    // 修饰符链里连 drawWithContent 都不存在 —— 不是"少画一点"，是"压根不画"。
                     .then(
-                        if (settings.glassEffect.blursBackdrop) {
+                        if (recordBackdrop) {
                             Modifier
                                 .onGloballyPositioned { backdropOrigin = it.positionInRoot() }
                                 .drawWithContent {
@@ -475,6 +508,9 @@ private fun AppRoot(vm: MainViewModel, onBarHeightChange: (Dp) -> Unit) {
                             tab = tab,
                             vm = vm,
                             onTabChange = { tab = it },
+                            // 考研页里「去设置」要真的能跳过去：设置是 AppRoot 的覆盖层，
+                            // 只有这里能把 overlay 切过去。
+                            onOpenSettings = { overlay = Overlay.SETTINGS },
                             slideSpec = slideSpec,
                             slideFastSpec = slideFastSpec,
                             fadeSpec = fadeSpec,
@@ -505,9 +541,15 @@ private fun AppRoot(vm: MainViewModel, onBarHeightChange: (Dp) -> Unit) {
                     modifier = Modifier.align(Alignment.BottomCenter),
                 ) {
                     GlassPanel(
-                        effect = settings.glassEffect,
+                        // 传生效后的效果，而不是用户选的：性能模式开着时这里收到 NONE，
+                        // GlassPanel 于是走纯色分支（不建模糊图层、不画录像）。
+                        effect = effectiveGlass,
                         backdrop = contentLayer,
                         backdropOrigin = backdropOrigin,
+                        // 录像可能是旧的（比如刚关掉性能模式）。底栏只在 recordBackdrop
+                        // 为真的那些帧里才有正确的录像可画，其余时候退化成纯色块，
+                        // 不会画出一份过期的画面。
+                        backdropFresh = recordBackdrop,
                         // 染色取主题的 surfaceVariant，而不是 surfaceContainer：
                         // MIUI X 下 surfaceContainer 是**纯白**，白叠白会把模糊冲得看不见；
                         // surfaceVariant 在 M3 是暖灰、在 MIUI X 是浅灰，两套都有对比度。
@@ -599,6 +641,7 @@ private fun TabHost(
     tab: Tab,
     vm: MainViewModel,
     onTabChange: (Tab) -> Unit,
+    onOpenSettings: () -> Unit,
     slideSpec: FiniteAnimationSpec<IntOffset>,
     slideFastSpec: FiniteAnimationSpec<IntOffset>,
     fadeSpec: FiniteAnimationSpec<Float>,
@@ -614,7 +657,11 @@ private fun TabHost(
             Tab.TODAY -> TodayScreen(vm, Modifier.fillMaxSize())
             Tab.EXAMS -> ExamsScreen(vm, Modifier.fillMaxSize())
             Tab.GRADES -> GradesScreen(vm, Modifier.fillMaxSize())
-            Tab.ROOMS -> ClassroomsScreen(vm, Modifier.fillMaxSize())
+            Tab.KAOYAN -> KaoyanScreen(
+                vm = vm,
+                modifier = Modifier.fillMaxSize(),
+                onOpenSettings = onOpenSettings,
+            )
         }
     }
 }

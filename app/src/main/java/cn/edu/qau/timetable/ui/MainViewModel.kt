@@ -8,12 +8,12 @@ import cn.edu.qau.timetable.core.DayOverrides
 import cn.edu.qau.timetable.core.GlassEffect
 import cn.edu.qau.timetable.core.SilenceMode
 import cn.edu.qau.timetable.core.UiStyle
-import cn.edu.qau.timetable.data.model.ClassroomEntity
 import cn.edu.qau.timetable.data.model.ExamEntity
 import cn.edu.qau.timetable.data.model.GradeEntity
 import cn.edu.qau.timetable.data.model.TermEntity
 import cn.edu.qau.timetable.data.prefs.AppSettings
 import cn.edu.qau.timetable.data.qz.QzPayload
+import cn.edu.qau.timetable.data.repo.KaoyanRepository
 import cn.edu.qau.timetable.data.repo.TimetableRepository
 import cn.edu.qau.timetable.domain.CourseEvent
 import cn.edu.qau.timetable.notify.ReminderScheduler
@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -34,6 +35,14 @@ class MainViewModel(
     private val repo: TimetableRepository,
     private val reminders: ReminderScheduler,
     private val silence: SilenceScheduler,
+    /**
+     * 考研模块的仓库。
+     *
+     * 这个类只借它做一件事：设置页「AI 搜索」卡片的保存与回读。
+     * 考研页面的运行状态（意向画像、推荐结果、问答）全部归 `KaoyanViewModel`，
+     * 不要往这里搬 —— 两个 ViewModel 各持一份同一批数据只会互相打架。
+     */
+    private val kaoyan: KaoyanRepository,
 ) : ViewModel() {
 
     val settings: StateFlow<AppSettings> =
@@ -58,9 +67,6 @@ class MainViewModel(
 
     val grades: StateFlow<List<GradeEntity>> =
         repo.observeGrades().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    val classrooms: StateFlow<List<ClassroomEntity>> =
-        repo.observeClassrooms().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** 0 表示「跟随当前周」。 */
     private val _weekOverride = MutableStateFlow(0)
@@ -155,9 +161,41 @@ class MainViewModel(
         _toast.value = if (enabled) "已开启上课提醒" else "已关闭上课提醒"
     }
 
-    fun setUrls(kb: String, exam: String, grade: String, classroom: String) = safeLaunch {
-        repo.settings.setUrls(kb, exam, grade, classroom)
+    fun setUrls(kb: String, exam: String, grade: String) = safeLaunch {
+        repo.settings.setUrls(kb, exam, grade)
         _toast.value = "抓取地址已保存"
+    }
+
+    /**
+     * 保存 AI 服务配置（设置 → AI 搜索）。
+     *
+     * 三个字段一次写：它们只有凑成一次可用请求才有意义，
+     * 分开写会留下「URL 是新的、模型名还是旧的」这种半配置状态。
+     */
+    fun setAi(baseUrl: String, apiKey: String, model: String) = safeLaunch {
+        // 走 repo.settings（和考研仓库共用同一个 SettingsStore 实例）：
+        // 设置页只需要把三项原样落盘，没必要为写个配置再拉一层仓库方法。
+        repo.settings.setAi(baseUrl, apiKey, model)
+        // 提示按**落盘后回读到的值**判断，而不是按入参：setAi 会 trim、
+        // 模型名留空还会回落到默认值。按入参判断会把「只敲了空格的密钥」
+        // 报成「已保存」，用户到 AI 页才发现用不了。
+        val ready = runCatching { kaoyan.settingsFlow.first().aiConfig.isReady }
+            .getOrDefault(false)
+        _toast.value = if (ready) {
+            "AI 配置已保存"
+        } else {
+            "AI 配置已保存，但 base URL、密钥或模型名还缺一项，AI 搜索暂不可用"
+        }
+    }
+
+    /** 保存考研目录的远端刷新地址。留空 = 只用内置目录。 */
+    fun setKaoyanCatalogUrl(url: String) = safeLaunch {
+        repo.settings.setKaoyanCatalogUrl(url)
+        _toast.value = if (url.isBlank()) {
+            "已清空目录地址，改用内置目录"
+        } else {
+            "考研目录地址已保存"
+        }
     }
 
     /**
@@ -195,6 +233,21 @@ class MainViewModel(
     fun setGlassEffect(effect: GlassEffect) = safeLaunch {
         repo.settings.setGlassEffect(effect)
         _toast.value = "底栏效果：${effect.label}"
+    }
+
+    /**
+     * 性能模式。
+     *
+     * 打开 = 底栏玻璃强制降级为纯色：不把整屏录进 GraphicsLayer、不实时模糊。
+     * 这是这个 App 唯一"每帧都在烧 GPU"的地方，低内存设备的默认值就是开。
+     */
+    fun setPerformanceMode(enabled: Boolean) = safeLaunch {
+        repo.settings.setPerformanceMode(enabled)
+        _toast.value = if (enabled) {
+            "性能模式已开：底栏改用纯色，不再实时模糊"
+        } else {
+            "性能模式已关：恢复底栏玻璃效果"
+        }
     }
 
     /** Material You 动态取色。只对 Material 3 风格生效。 */

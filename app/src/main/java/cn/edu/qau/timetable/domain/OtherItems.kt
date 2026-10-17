@@ -19,11 +19,5 @@ data class GradeItem(
     val kind: String = "",
 )
 
-/** 空闲教室条目。 */
-data class ClassroomItem(
-    val building: String = "",
-    val room: String,
-    val campus: String = "",
-    val freeSlots: String = "",
-    val capacity: Int = 0,
-)
+// 原先这里还有一个 ClassroomItem（空闲教室条目）。
+// 学校教务系统禁止访问空闲教室界面，该功能已整体下线，模型一并移除。

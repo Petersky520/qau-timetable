@@ -58,6 +58,15 @@ val FloatingBarMargin = 10.dp
  * [backdropOrigin] 是那份录像左上角在 root 里的位置，[selfOrigin] 是面板自己的。
  * layer 里的坐标是相对录像左上角的，所以平移量 = 录像原点 − 面板原点。
  * 两个值都在运行时量出来，因此不管外面套了几层 Box / padding 都不会错位。
+ *
+ * ## [backdropFresh]：录像可能没在录
+ *
+ * 录屏是有开关的（见 `MainActivity` 的 `recordBackdrop`）：性能模式、或者底栏
+ * 被覆盖层挤走时，内容层**不再录屏**。这时 [backdrop] 里是上一帧甚至更早的画面，
+ * 画出来就是一块"时间静止"的旧图 —— 比纯色难看得多。
+ * 所以调用方要告诉面板"这一帧的录像是不是新鲜"，不新鲜就只画染色。
+ *
+ * @param backdropFresh 本帧的 [backdrop] 是否可用。false 时只画染色（纯色块）。
  */
 @Composable
 fun GlassPanel(
@@ -67,9 +76,12 @@ fun GlassPanel(
     tint: Color,
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(28.dp),
+    backdropFresh: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     var selfOrigin by remember { mutableStateOf(Offset.Zero) }
+    // 要模糊，并且真的有一份新鲜的录像可模糊 —— 否则纯色更诚实。
+    val blurBackdrop = effect.blursBackdrop && backdropFresh
 
     Box(
         modifier
@@ -86,7 +98,7 @@ fun GlassPanel(
         // 面板就退化成一块不透明的白板。
         //
         // 选「无」时整块跳过：染色本来就不透明，画了也看不见。
-        if (effect.blursBackdrop) {
+        if (blurBackdrop) {
             Box(
                 Modifier
                     .matchParentSize()
@@ -105,7 +117,7 @@ fun GlassPanel(
         Box(
             Modifier
                 .matchParentSize()
-                .background(if (effect.blursBackdrop) tint.copy(alpha = 0.62f) else tint),
+                .background(if (blurBackdrop) tint.copy(alpha = 0.62f) else tint),
         )
 
         // ③ 极淡的一圈边，否则一整块平涂看不出边界在哪

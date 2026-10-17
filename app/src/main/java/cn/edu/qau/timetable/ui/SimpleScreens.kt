@@ -375,31 +375,6 @@ private fun GradeCourseCard(g: GradeEntity, index: Int, animate: Boolean) {
     }
 }
 
-@Composable
-fun ClassroomsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
-    val rooms by vm.classrooms.collectAsState()
-    if (rooms.isEmpty()) {
-        EmptyState("还没有空闲教室数据", "在「同步」页登录后抓取一次空闲教室。")
-        return
-    }
-    val entrance = rememberEntranceWindow(rooms.size)
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        itemsIndexed(rooms) { index, r ->
-            Card(Modifier.fillMaxWidth().staggeredAppear(index, animate = entrance)) {
-                Column(Modifier.padding(12.dp)) {
-                    Text(r.room, style = MaterialTheme.typography.titleSmall)
-                    val sub = listOf(r.building, r.campus, if (r.capacity > 0) "容纳 ${r.capacity} 人" else "")
-                        .filter { it.isNotEmpty() }.joinToString(" · ")
-                    if (sub.isNotEmpty()) Text(sub, style = MaterialTheme.typography.bodySmall)
-                    if (r.freeSlots.isNotEmpty()) {
-                        Text("空闲：${r.freeSlots}", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-        }
-    }
-}
+// 原先这里还有一个 ClassroomsScreen（空闲教室列表）。
+// 学校教务系统禁止访问空闲教室界面，抓不到数据，页面已整体移除，
+// 底栏对应标签也一起删掉 —— 而不是留一个永远显示「还没有数据」的空页面。

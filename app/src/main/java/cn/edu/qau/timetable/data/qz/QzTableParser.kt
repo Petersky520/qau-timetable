@@ -3,7 +3,6 @@ package cn.edu.qau.timetable.data.qz
 import cn.edu.qau.timetable.core.PeriodTimes
 import cn.edu.qau.timetable.core.WeekPattern
 import cn.edu.qau.timetable.core.WeekPatternParser
-import cn.edu.qau.timetable.domain.ClassroomItem
 import cn.edu.qau.timetable.domain.CourseEvent
 import cn.edu.qau.timetable.domain.ExamItem
 import cn.edu.qau.timetable.domain.GradeItem
@@ -583,31 +582,6 @@ object QzTableParser {
                 score = r.getOrNull(iScore).orEmpty().trim().toDoubleOrNull() ?: 0.0,
                 gpa = r.getOrNull(iGpa).orEmpty().trim().toDoubleOrNull() ?: 0.0,
                 kind = r.getOrNull(iKind).orEmpty().trim(),
-            )
-        }
-    }
-
-    fun parseClassrooms(rows: List<List<String>>): List<ClassroomItem> {
-        if (rows.isEmpty()) return emptyList()
-        val headers = rows.first().map { it.trim() }
-        val hasHeader = headers.any { it.contains("教室") || it.contains("校区") }
-        val data = if (hasHeader) rows.drop(1) else rows
-
-        val iRoom = if (hasHeader) headerIndexOf(headers, "教室", "房间") else 0
-        val iBuilding = if (hasHeader) headerIndexOf(headers, "楼", "教学楼", "建筑") else -1
-        val iCampus = if (hasHeader) headerIndexOf(headers, "校区") else -1
-        val iFree = if (hasHeader) headerIndexOf(headers, "空闲", "节次") else -1
-        val iCap = if (hasHeader) headerIndexOf(headers, "容纳", "人数", "座位") else -1
-
-        return data.mapNotNull { r ->
-            val room = r.getOrNull(if (iRoom >= 0) iRoom else 0).orEmpty().trim()
-            if (room.isEmpty()) return@mapNotNull null
-            ClassroomItem(
-                room = room,
-                building = if (iBuilding >= 0) r.getOrNull(iBuilding).orEmpty().trim() else "",
-                campus = if (iCampus >= 0) r.getOrNull(iCampus).orEmpty().trim() else "",
-                freeSlots = if (iFree >= 0) r.getOrNull(iFree).orEmpty().trim() else "",
-                capacity = if (iCap >= 0) r.getOrNull(iCap).orEmpty().filter { it.isDigit() }.toIntOrNull() ?: 0 else 0,
             )
         }
     }

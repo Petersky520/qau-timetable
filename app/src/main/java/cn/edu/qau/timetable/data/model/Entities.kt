@@ -7,6 +7,7 @@ import cn.edu.qau.timetable.core.Campus
 import cn.edu.qau.timetable.core.Term
 import cn.edu.qau.timetable.core.WeekPattern
 import cn.edu.qau.timetable.core.WeekPatternParser
+import cn.edu.qau.timetable.core.kaoyan.SchoolItem
 import cn.edu.qau.timetable.domain.CourseEvent
 import java.time.LocalDate
 
@@ -118,13 +119,74 @@ data class GradeEntity(
     val kind: String = "",
 )
 
-@Entity(tableName = "classrooms")
-data class ClassroomEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val building: String = "",
-    val room: String,
-    val campus: String = "",
-    /** 空闲节次，形如 "1-2,5-6" */
-    val freeSlots: String = "",
-    val capacity: Int = 0,
-)
+// 原先这里还有一个 ClassroomEntity（tableName = "classrooms"），
+// 用来存「空闲教室」查询结果。学校教务系统禁止访问空闲教室界面，
+// 这个功能整条链路已下线，实体一并删除 —— 存留的旧表由
+// AppDatabase.MIGRATION_1_2 显式 DROP，不影响课表 / 成绩 / 考试。
+
+/**
+ * 考研院校招生条目（院校 × 专业各一行）。
+ *
+ * 为什么不直接让 Room 存 `core.kaoyan.SchoolItem`：core 包是纯 Kotlin、
+ * 零 Android 依赖，单测在 JVM 上直接跑。一旦给它挂上 `@Entity`，
+ * 推荐引擎和站点目录的单测就得连带 JVM 里的 Room 运行时 ——
+ * 为了少写这二十行映射，把纯逻辑层弄脏不划算。
+ *
+ * 索引只建在 `majorCode` 上：选校页按专业筛，而 `tier`/`name` 只是排序，
+ * 全表最多几十上百行，再建索引纯属浪费写入。
+ */
+@Entity(tableName = "kaoyan_schools", indices = [Index("majorCode")])
+data class KaoyanSchoolEntity(
+    /** 稳定主键，形如 "10423-0812"，院校代码 + 学科代码。 */
+    @PrimaryKey val id: String,
+    val name: String,
+    val province: String,
+    val city: String,
+    /** 院校层次原文，如 "985"；打分时由 SchoolTier.fromName 解析。 */
+    val tier: String,
+    val majorCode: String,
+    val majorName: String,
+    val scoreLast: Int = 0,
+    val scorePrev: Int = 0,
+    val quota: Int = 0,
+    val applicants: Int = 0,
+    val mathRequired: Boolean = false,
+    val tags: String = "",
+    val note: String = "",
+) {
+    fun toDomain(): SchoolItem = SchoolItem(
+        id = id,
+        name = name,
+        province = province,
+        city = city,
+        tier = tier,
+        majorCode = majorCode,
+        majorName = majorName,
+        scoreLast = scoreLast,
+        scorePrev = scorePrev,
+        quota = quota,
+        applicants = applicants,
+        mathRequired = mathRequired,
+        tags = tags,
+        note = note,
+    )
+
+    companion object {
+        fun fromDomain(e: SchoolItem): KaoyanSchoolEntity = KaoyanSchoolEntity(
+            id = e.id,
+            name = e.name,
+            province = e.province,
+            city = e.city,
+            tier = e.tier,
+            majorCode = e.majorCode,
+            majorName = e.majorName,
+            scoreLast = e.scoreLast,
+            scorePrev = e.scorePrev,
+            quota = e.quota,
+            applicants = e.applicants,
+            mathRequired = e.mathRequired,
+            tags = e.tags,
+            note = e.note,
+        )
+    }
+}

@@ -21,6 +21,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +45,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -82,7 +84,12 @@ fun SettingsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     var kbUrl by remember { mutableStateOf(settings.kbUrl) }
     var examUrl by remember { mutableStateOf(settings.examUrl) }
     var gradeUrl by remember { mutableStateOf(settings.gradeUrl) }
-    var classroomUrl by remember { mutableStateOf(settings.classroomUrl) }
+
+    // AI 搜索（考研模块用）。密钥输入框走密码样式，且**不**回显到任何日志。
+    var aiBaseUrl by remember { mutableStateOf(settings.aiBaseUrl) }
+    var aiApiKey by remember { mutableStateOf(settings.aiApiKey) }
+    var aiModel by remember { mutableStateOf(settings.aiModel) }
+    var catalogUrl by remember { mutableStateOf(settings.kaoyanCatalogUrl) }
 
     // 调休「新增一条」表单的草稿状态。
     // newPick：-1 = 还没选；0 = 放假；1..7 = 补那一天的课。
@@ -101,7 +108,10 @@ fun SettingsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         kbUrl = settings.kbUrl
         examUrl = settings.examUrl
         gradeUrl = settings.gradeUrl
-        classroomUrl = settings.classroomUrl
+        aiBaseUrl = settings.aiBaseUrl
+        aiApiKey = settings.aiApiKey
+        aiModel = settings.aiModel
+        catalogUrl = settings.kaoyanCatalogUrl
     }
 
     // 从系统设置页返回时重新读一次权限 —— 否则用户授完权回到 App，
@@ -230,6 +240,39 @@ fun SettingsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     Text(
                         "选了模糊，底栏会浮起来让内容从底下穿过",
                         style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+
+                HorizontalDivider(Modifier.padding(vertical = 2.dp))
+
+                // ------------------------------------------------- 性能模式
+                //
+                // 一个开关换掉"每帧整屏录屏 + 实时高斯模糊"。低内存设备默认就开着
+                // （SettingsStore 用 ActivityManager.isLowRamDevice 判断）。
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("性能模式", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (settings.performanceMode) {
+                                "已开启：底栏改用纯色，不再实时模糊。滚动更跟手，也更省电。"
+                            } else {
+                                "关着：底栏实时模糊背后内容。低端机上滚动可能掉帧就开这个。"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                        if (settings.performanceMode && settings.glassEffect.blursBackdrop) {
+                            // 用户选了模糊但被性能模式压平 —— 必须说清楚，
+                            // 否则他会以为「底栏效果」那颗 chip 坏了。
+                            Text(
+                                "开着性能模式时，「底栏效果」选的模糊不会生效，会以纯色显示。",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = settings.performanceMode,
+                        onCheckedChange = { vm.setPerformanceMode(it) },
                     )
                 }
             }
@@ -474,14 +517,69 @@ fun SettingsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                     label = { Text("成绩页") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Button(onClick = {
+                    vm.setUrls(kbUrl.trim(), examUrl.trim(), gradeUrl.trim())
+                }) { Text("保存地址") }
+            }
+        }
+
+        // ---------------------------------------------------------- AI 搜索
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("AI 搜索（考研）", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "「考研 → AI 搜索」用的是你自己填的服务：任何 OpenAI 兼容接口都行" +
+                        "（DeepSeek、通义、自建 vLLM 等）。三项都填了才会生效。",
+                    style = MaterialTheme.typography.labelSmall,
+                )
                 OutlinedTextField(
-                    value = classroomUrl, onValueChange = { classroomUrl = it },
-                    label = { Text("空闲教室页") }, singleLine = true,
+                    value = aiBaseUrl,
+                    onValueChange = { aiBaseUrl = it },
+                    label = { Text("Base URL") },
+                    placeholder = { Text("https://api.deepseek.com/v1") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Button(onClick = {
-                    vm.setUrls(kbUrl.trim(), examUrl.trim(), gradeUrl.trim(), classroomUrl.trim())
-                }) { Text("保存地址") }
+                OutlinedTextField(
+                    value = aiApiKey,
+                    onValueChange = { aiApiKey = it },
+                    label = { Text("API Key") },
+                    singleLine = true,
+                    // 密钥明文摆在屏幕上，旁边有人一眼就看走了
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = aiModel,
+                    onValueChange = { aiModel = it },
+                    label = { Text("模型名") },
+                    placeholder = { Text("deepseek-chat") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = catalogUrl,
+                    onValueChange = { catalogUrl = it },
+                    label = { Text("考研目录刷新地址（可空）") },
+                    placeholder = { Text("留空 = 只用内置样例目录") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = {
+                        vm.setAi(aiBaseUrl.trim(), aiApiKey.trim(), aiModel.trim())
+                    }) { Text("保存 AI 配置") }
+                    OutlinedButton(onClick = {
+                        vm.setKaoyanCatalogUrl(catalogUrl.trim())
+                    }) { Text("保存目录地址") }
+                }
+                // 「目录地址」和上面三项分开保存：改目录不该顺带把密钥重写一遍，
+                // 密钥框里可能刚被用户清空（想换一把还没拿到新的）。
+                Text(
+                    "密钥只存在本机 DataStore，不进仓库、不上传，App 也不会打印它。" +
+                        "换手机或卸载重装需要重新填一次。",
+                    style = MaterialTheme.typography.labelSmall,
+                )
             }
         }
 

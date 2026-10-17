@@ -27,7 +27,15 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:usesCleartextTraffic="true"
-        android:theme="@style/Theme.QauTimetable">
+        android:theme="@style/Theme.QauTimetable"
+        android:hardwareAccelerated="true">
+        <!--
+          hardwareAccelerated 默认就是 true，这里**显式**写出来的原因：
+          少数 ROM / 换过主题的机器会把 drawWithContent、Modifier.blur、
+          GraphicsLayer 这类绘制降级成软件渲染，表现是底栏模糊没了、列表一滚就撕。
+          显式声明可以防止主题或 ROM 覆盖（<application> 上的 manifest 值优先级
+          高于 theme 里的 android:windowIsTranslucent 一类间接影响）。
+        -->
 
         <activity
             android:name=".MainActivity"

@@ -4,7 +4,6 @@ import android.content.Context
 import cn.edu.qau.timetable.core.Campus
 import cn.edu.qau.timetable.core.Term
 import cn.edu.qau.timetable.data.db.AppDatabase
-import cn.edu.qau.timetable.data.model.ClassroomEntity
 import cn.edu.qau.timetable.data.model.CourseEventEntity
 import cn.edu.qau.timetable.data.model.ExamEntity
 import cn.edu.qau.timetable.data.model.GradeEntity
@@ -13,7 +12,6 @@ import cn.edu.qau.timetable.data.prefs.AppSettings
 import cn.edu.qau.timetable.data.prefs.SettingsStore
 import cn.edu.qau.timetable.data.qz.QzPayload
 import cn.edu.qau.timetable.data.qz.QzTableParser
-import cn.edu.qau.timetable.domain.ClassroomItem
 import cn.edu.qau.timetable.domain.CourseEvent
 import cn.edu.qau.timetable.domain.ExamItem
 import cn.edu.qau.timetable.domain.GradeItem
@@ -37,7 +35,6 @@ class TimetableRepository(
     fun observeActiveTerm(): Flow<TermEntity?> = db.termDao().observeActive()
     fun observeExams(termId: Long): Flow<List<ExamEntity>> = db.examDao().observeByTerm(termId)
     fun observeGrades(): Flow<List<GradeEntity>> = db.gradeDao().observeAll()
-    fun observeClassrooms(): Flow<List<ClassroomEntity>> = db.classroomDao().observeAll()
 
     fun observeCourses(termId: Long): Flow<List<CourseEvent>> =
         db.courseDao().observeByTerm(termId).map { list -> list.map { it.toDomain() } }
@@ -199,7 +196,6 @@ class TimetableRepository(
                 "kb" -> ingestTimetable(payload, current)
                 "exam" -> ingestExams(payload, current)
                 "grade" -> ingestGrades(payload, current)
-                "classroom" -> ingestClassrooms(payload)
                 else -> IngestResult(0, "未知的抓取类型：${payload.kind}")
             }
         } catch (t: Throwable) {
@@ -295,23 +291,6 @@ class TimetableRepository(
                     score = it.score,
                     gpa = it.gpa,
                     kind = it.kind,
-                )
-            }
-        )
-        return IngestResult(items.size, "")
-    }
-
-    private suspend fun ingestClassrooms(p: QzPayload): IngestResult {
-        val items: List<ClassroomItem> = QzTableParser.parseClassrooms(p.rows)
-        if (items.isEmpty()) return IngestResult(0, "没有解析出空闲教室")
-        db.classroomDao().insertAll(
-            items.map {
-                ClassroomEntity(
-                    building = it.building,
-                    room = it.room,
-                    campus = it.campus,
-                    freeSlots = it.freeSlots,
-                    capacity = it.capacity,
                 )
             }
         )

@@ -111,7 +111,6 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         QzEndpoints.Target.TIMETABLE -> appSettings.kbUrl
         QzEndpoints.Target.EXAMS -> appSettings.examUrl
         QzEndpoints.Target.GRADES -> appSettings.gradeUrl
-        QzEndpoints.Target.CLASSROOMS -> appSettings.classroomUrl
     }
 
     /**
