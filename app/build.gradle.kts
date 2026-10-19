@@ -31,8 +31,8 @@ android {
         applicationId = "cn.edu.qau.timetable"
         minSdk = 26
         targetSdk = 35
-        versionCode = 16
-        versionName = "3.4"
+        versionCode = 17
+        versionName = "3.4.1"
         resourceConfigurations += listOf("zh", "en")
     }
 
