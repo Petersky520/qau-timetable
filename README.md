@@ -100,27 +100,6 @@ app/src/main/java/cn/edu/qau/timetable/
 └── notify/                AlarmManager 上课提醒与上课静音
 ```
 
-### 性能约定（改考研页前先读）
-
-`ui/kaoyan/KaoyanSchoolScreen.kt` 是用户报掉帧的那一页，下面几条不是风格偏好：
-
-1. **玻璃底栏不逐帧录屏**。`MainActivity` 里整屏 `contentLayer.record { drawContent() }`
-   只在 `effectiveGlassEffect.blursBackdrop && overlay == Overlay.NONE` 时才开
-   —— 覆盖层推入时底栏不可见，录了也白录。设置里的**性能模式**会把玻璃强制压成
-   纯色（`AppSettings.effectiveGlassEffect`），默认跟随 `ActivityManager.isLowRamDevice`。
-2. **列表数据 `remember(依赖)`**，不在 composable 体里 `buildList` / `filter`。
-3. **`LazyColumn` 项必须有稳定 `key`**（分组头 `h-<tier>`、卡片 `i-<school.id>`）。
-4. **进度条自绘**（`ScoreBar`，一条 4dp 圆角 Box），不用 Material3 的
-   `LinearProgressIndicator` —— 它带 indeterminate 动画规范，lambda 版 `progress`
-   还会每帧读状态。
-5. **卡片拿 `@Immutable` 的 `KaoyanCardUi`**，不是 core 的 `Recommendation`。
-   `core/kaoyan/` 零 Android/Compose 依赖这条底线不能为了 `@Immutable` 破。
-
-实测（`PerfBenchProbeTest`，JVM 中位数，数字同时写 `app/build/perf-bench.txt`）：
-463 条真实种子下 `recommend` **0.03 ms**（专业过滤前是 0.17 ms —— 候选集从 463 缩到 15），
-分组单次 0.01 ms；**加 `remember` 前**一次滚动会话的 120 次重组要白烧 1.16 ms。
-跨考画像是最坏情况（240 条全部打分），也只有 0.08 ms。
-
 ### 推荐引擎的一条硬规则
 
 **专业是筛选条件，不是加分项。** `crossMajor = false` 时 `recommend()` 会先把候选集
@@ -131,30 +110,6 @@ app/src/main/java/cn/edu/qau/timetable/
 于是**默认画像的前 60 条里 45 条是作物学、兽医学**，用户没勾跨考却满屏别的专业。
 现在改成硬过滤后对口率 100%。回归护栏在 `SeedCatalogIntegrityTest` 的三条一组断言里
 （过滤被删 / 写反 / 过滤过头都有对应断言）。
-
-### 动效
-
-`ui/motion/Motion.kt` 是一套集中定义的运动语言，界面里不写零散的缓动表。
-四条原则：
-
-- **物理建模而非定时**：位移、缩放一律走弹簧，时长是解出来的。观感是"起步快、
-  收尾长"的非线性曲线。
-- **路径稳定**：位移弹簧取 `dampingRatio = 0.9`，几乎不过冲 —— 位移一旦回弹，
-  "怎么进来的就怎么回去"就不成立，元素看起来在漂。只有缩放允许轻微回弹
-  （`0.62`，约 3% 过冲），因为缩放不涉及位置。
-- **进快出慢**：退场用更硬的弹簧迅速让位，进场留足收尾时间。两者对称是动画
-  显得廉价最直接的原因。
-- **速度连续**：弹簧中途改目标会带着当前速度继续，快速连点周次切换或来回切
-  标签不会跳变重放。
-
-落地在标签页方向性切换、设置/同步覆盖层的视差推入（新页 100%、旧页退 28%）、
-顶栏与周次数字的整高滚动、课表格子与列表项的错落入场。
-
-遵循系统「动画时长缩放」（`Settings.Global.ANIMATOR_DURATION_SCALE`）：用户在
-无障碍或开发者选项里关掉动画时，所有弹簧降级为瞬时落位。
-
-列表项入场额外受 `rememberEntranceWindow()` 约束：只在该窗口内组合出来的项才播
-动画，否则 LazyColumn 销毁/重建视口外的项会让卡片在来回滚动时反复淡入。
 
 ### 抓取流程
 
