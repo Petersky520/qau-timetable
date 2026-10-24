@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Lite 版的资源覆盖。
+
+  只覆盖和完整版**该不一样**的东西：桌面显示名、小组件说明。
+  其余资源（主题、颜色、布局）继续用 main 里的那份 ——
+  两个版本的视觉本来就应该一致，那是同一个产品。
+-->
+<resources>
+    <!-- 桌面图标下的名字。加「Lite」是为了和完整版并排放在桌面上时能一眼分清。 -->
+    <string name="app_name">青小农Lite</string>
+
+    <string name="widget_description">今日课程一目了然；今天没课时显示最近一次课。（Lite 版）</string>
+</resources>

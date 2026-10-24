@@ -141,7 +141,14 @@ fun KaoyanSiteScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            itemsIndexed(sites, key = { _, s -> s.id }) { index, site ->
+            itemsIndexed(
+                items = sites,
+                // ResearchSite.id 来自内置目录，天然唯一且不随过滤/排序变化；
+                // 用它当 key，滚动出视口再回来时能复用同一个 item，入场动画也不会重播。
+                key = { _, s -> s.id },
+                // 列表里只有一种卡片：显式声明让它成为独立的内容类型，避免和其它类型混用槽位
+                contentType = { _, _ -> "site" },
+            ) { index, site ->
                 SiteRow(
                     site = site,
                     onSearch = {

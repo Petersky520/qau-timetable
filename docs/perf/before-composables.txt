@@ -1,0 +1,218 @@
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun AppRoot(
+  unstable vm: MainViewModel
+  stable onBarHeightChange: Function1<Dp, Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun NavBarItems(
+  stable <this>: RowScope
+  stable tab: Tab
+  stable overlay: Overlay
+  stable onSelect: Function1<Tab, Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun TabHost(
+  stable tab: Tab
+  unstable vm: MainViewModel
+  unused stable onTabChange: Function1<Tab, Unit>
+  stable onOpenSettings: Function0<Unit>
+  unstable slideSpec: FiniteAnimationSpec<IntOffset>
+  unstable slideFastSpec: FiniteAnimationSpec<IntOffset>
+  unstable fadeSpec: FiniteAnimationSpec<Float>
+  unstable fadeFastSpec: FiniteAnimationSpec<Float>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun SettingsScreen(
+  unstable vm: MainViewModel
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun DateField(
+  stable value: String
+  stable onValueChange: Function1<String, Unit>
+  stable label: String
+  stable placeholder: String
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun EmptyState(
+  stable title: String
+  stable hint: String
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun TodayScreen(
+  unstable vm: MainViewModel
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun CourseRow(
+  unstable course: CourseEvent
+  stable campus: Campus
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun ExamsScreen(
+  unstable vm: MainViewModel
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun GradesScreen(
+  unstable vm: MainViewModel
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun GradeStat(
+  stable label: String
+  stable value: String
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun TermHeader(
+  stable row: Term
+  stable index: Int
+  stable animate: Boolean
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun GradeCourseCard(
+  stable g: GradeEntity
+  stable index: Int
+  stable animate: Boolean
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun SyncScreen(
+  unstable vm: MainViewModel
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun TimetableScreen(
+  unstable vm: MainViewModel
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun WeekBar(
+  stable week: Int
+  stable isCurrent: Boolean
+  stable realCurrent: Int
+  stable campus: Campus
+  stable hasTerm: Boolean
+  stable onPrev: Function0<Unit>
+  stable onNext: Function0<Unit>
+  stable onToday: Function0<Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun EmptyTimetable()
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun TimetableGrid(
+  unstable courses: List<CourseEvent>
+  stable week: Int
+  stable campus: Campus
+  unstable term: Term?
+  unstable overrides: List<DayOverride>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun CourseCell(
+  unstable course: CourseEvent
+  stable extra: Int
+  stable modifier: Modifier
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable, [androidx.compose.ui.UiComposable]]") fun GlassPanel(
+  stable effect: GlassEffect
+  unstable backdrop: GraphicsLayer
+  stable backdropOrigin: Offset
+  stable tint: Color
+  stable modifier: Modifier? = @static Companion
+  stable shape: Shape? = @dynamic RoundedCornerShape(28.dp)
+  stable backdropFresh: Boolean = @static true
+  stable content: @[ExtensionFunctionType] Function3<BoxScope, Composer, Int, Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun EmptyState(
+  stable title: String
+  stable hint: String
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun KaoyanAiScreen(
+  unstable vm: KaoyanViewModel
+  stable onGoSettings: Function0<Unit>
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun AiApiPane(
+  unstable vm: KaoyanViewModel
+  stable onGoSettings: Function0<Unit>
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun EmptyState(
+  stable title: String
+  stable hint: String
+  stable animate: Boolean = @static true
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun KaoyanSchoolScreen(
+  unstable vm: KaoyanViewModel
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun ProfileCard(
+  unstable vm: KaoyanViewModel
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun ChipLabel(
+  stable text: String
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun MajorPicker(
+  stable profile: KaoyanProfile
+  stable onSelect: Function1<Major, Unit>
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun MajorSelector(
+  stable profile: KaoyanProfile
+  stable onSelect: Function1<Major, Unit>
+  stable modifier: Modifier? = @static Companion
+  unstable majors: List<Major>? = @dynamic entries
+  stable grouped: Boolean = @static true
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun SwitchRow(
+  stable title: String
+  stable subtitle: String
+  stable checked: Boolean
+  stable onCheckedChange: Function1<Boolean, Unit>
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun GroupHeader(
+  stable row: Header
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun RecommendCard(
+  stable card: KaoyanCardUi
+  stable favorite: Boolean
+  stable onToggleFavorite: Function0<Unit>
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun ScoreBar(
+  stable fraction: Float
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun TierBadge(
+  stable tier: String
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun KaoyanScreen(
+  unstable vm: MainViewModel
+  stable modifier: Modifier? = @static Companion
+  stable onOpenSettings: Function0<Unit>? = @static null
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun EmptyState(
+  stable title: String
+  stable hint: String
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun KaoyanSiteScreen(
+  unstable vm: KaoyanViewModel
+  unstable categories: Set<SiteCategory>
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun SiteRow(
+  stable site: ResearchSite
+  stable onSearch: Function0<Unit>
+  stable onOpenHome: Function0<Unit>
+  stable modifier: Modifier? = @static Companion
+)
+restartable skippable scheme("[androidx.compose.ui.UiComposable]") fun MultiSiteDialog(
+  unstable sites: List<ResearchSite>
+  stable query: String
+  stable onDismiss: Function0<Unit>
+  stable onPick: Function1<ResearchSite, Unit>
+)
+fun rememberMotionEnabled()
+fun motionOf(
+  unstable spec: FiniteAnimationSpec<T>
+): FiniteAnimationSpec<T>
+fun staggeredAppear(
+  stable <this>: Modifier
+  stable index: Int
+  unstable key: Any? = @static Unit
+  stable animate: Boolean = @static true
+): Modifier
+fun rememberEntranceWindow(
+  stable itemCount: Int
+): Boolean
+restartable skippable scheme("[0, [0]]") fun QauTheme(
+  stable style: UiStyle? = @static UiStyle.MATERIAL3
+  stable darkTheme: Boolean = @dynamic isSystemInDarkTheme($composer, 0)
+  stable dynamicColor: Boolean = @static true
+  stable content: Function2<Composer, Int, Unit>
+)

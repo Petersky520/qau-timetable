@@ -1,0 +1,655 @@
+unstable class AppDatabase_Impl {
+  unstable val _termDao: Lazy<TermDao>
+  unstable val _courseDao: Lazy<CourseDao>
+  unstable val _examDao: Lazy<ExamDao>
+  unstable val _gradeDao: Lazy<GradeDao>
+  unstable val _kaoyanSchoolDao: Lazy<KaoyanSchoolDao>
+  <runtime stability> = Unstable
+}
+unstable class CourseDao_Impl {
+  unstable val __db: RoomDatabase
+  unstable val __insertAdapterOfCourseEventEntity: EntityInsertAdapter<CourseEventEntity>
+  <runtime stability> = Unstable
+}
+unstable class ExamDao_Impl {
+  unstable val __db: RoomDatabase
+  unstable val __insertAdapterOfExamEntity: EntityInsertAdapter<ExamEntity>
+  <runtime stability> = Unstable
+}
+unstable class GradeDao_Impl {
+  unstable val __db: RoomDatabase
+  unstable val __insertAdapterOfGradeEntity: EntityInsertAdapter<GradeEntity>
+  <runtime stability> = Unstable
+}
+unstable class KaoyanSchoolDao_Impl {
+  unstable val __db: RoomDatabase
+  unstable val __insertAdapterOfKaoyanSchoolEntity: EntityInsertAdapter<KaoyanSchoolEntity>
+  <runtime stability> = Unstable
+}
+unstable class TermDao_Impl {
+  unstable val __db: RoomDatabase
+  unstable val __insertAdapterOfTermEntity: EntityInsertAdapter<TermEntity>
+  unstable val __updateAdapterOfTermEntity: EntityDeleteOrUpdateAdapter<TermEntity>
+  <runtime stability> = Unstable
+}
+unstable class MainActivity {
+  unstable val vm$delegate: Lazy<MainViewModel>
+  <runtime stability> = Unstable
+}
+unstable class QauApp {
+  unstable var container: AppContainer
+  <runtime stability> = Unstable
+}
+unstable class AppContainer {
+  stable val db: AppDatabase
+  unstable val settings: SettingsStore
+  unstable val repo: TimetableRepository
+  unstable val kaoyan: KaoyanRepository
+  unstable val reminders: ReminderScheduler
+  unstable val silence: SilenceScheduler
+  <runtime stability> = Unstable
+}
+unstable class DayOverride {
+  unstable val date: LocalDate
+  stable val useDayOfWeek: Int?
+  stable val note: String
+  <runtime stability> = Unstable
+}
+unstable class DayOverrides {
+  unstable val WEEK_LABELS: Array<String>
+  <runtime stability> = Unstable
+}
+stable class GradeRecord {
+  stable val credit: Double
+  stable val score: Double
+  stable val gpa: Double
+  <runtime stability> = Stable
+}
+stable class GradeStats {
+  stable val totalCredit: Double
+  stable val earnedCredit: Double
+  stable val gpa: Double
+  stable val weightedScore: Double
+  stable val courseCount: Int
+  stable val failedCount: Int
+  <runtime stability> = Stable
+}
+stable class GradeSummary {
+  stable val PASS_SCORE: Double
+  <runtime stability> = Stable
+}
+unstable class ClassPeriod {
+  stable val index: Int
+  unstable val start: LocalTime
+  unstable val end: LocalTime
+  <runtime stability> = Unstable
+}
+unstable class PeriodTimes {
+  unstable val CHENGYANG: List<ClassPeriod>
+  unstable val PINGDU: List<ClassPeriod>
+  unstable val CHENGYANG_PREP: List<@[FlexibleNullability] LocalTime?>
+  unstable val PINGDU_PREP: List<@[FlexibleNullability] LocalTime?>
+  stable val PERIOD_COUNT: Int
+  <runtime stability> = Unstable
+}
+unstable class TimeSpan {
+  unstable val start: LocalTime
+  unstable val end: LocalTime
+  <runtime stability> = Unstable
+}
+stable class SilenceWindow {
+  stable val DEFAULT_MERGE_GAP_MINUTES: Int
+  <runtime stability> = Stable
+}
+unstable class Term {
+  stable val name: String
+  unstable val startMonday: LocalDate
+  stable val totalWeeks: Int
+  stable val campus: Campus
+  <runtime stability> = Unstable
+}
+unstable class WeekPattern {
+  stable val raw: String
+  unstable val weeks: Set<Int>
+  stable val oddOnly: Boolean
+  stable val evenOnly: Boolean
+  <runtime stability> = Unstable
+}
+unstable class WeekPatternParser {
+  unstable val RANGE: Regex
+  unstable val SINGLE: Regex
+  <runtime stability> = Unstable
+}
+stable class AiConfig {
+  stable val baseUrl: String
+  stable val apiKey: String
+  stable val model: String
+  stable val timeoutSeconds: Int
+  <runtime stability> = Stable
+}
+stable class AiMessage {
+  stable val role: String
+  stable val content: String
+  <runtime stability> = Stable
+}
+stable class Ok {
+  stable val text: String
+  <runtime stability> = Stable
+}
+stable class Failed {
+  stable val message: String
+  <runtime stability> = Stable
+}
+stable class KaoyanProfile {
+  stable val major: Major
+  stable val region: Region
+  stable val ambition: Ambition
+  stable val undergraduateTier: SchoolTier
+  stable val crossMajor: Boolean
+  stable val acceptMath: Boolean
+  stable val minQuota: Int
+  <runtime stability> = Stable
+}
+stable class MajorSearch {
+  <runtime stability> = Stable
+}
+unstable class SchoolScore {
+  stable val score: Int
+  unstable val reasons: List<String>
+  unstable val warnings: List<String>
+  <runtime stability> = Unstable
+}
+unstable class Recommendation {
+  stable val school: SchoolItem
+  unstable val score: SchoolScore
+  stable val tier: Ambition
+  <runtime stability> = Unstable
+}
+unstable class RecommendEngine {
+  unstable val CANONICAL_TIER_ORDER: List<Ambition>
+  stable val REACH_THRESHOLD: Int
+  stable val MATCH_THRESHOLD: Int
+  <runtime stability> = Unstable
+}
+stable class ResearchSite {
+  stable val id: String
+  stable val name: String
+  stable val category: SiteCategory
+  stable val homepage: String
+  stable val searchTemplate: String
+  stable val description: String
+  <runtime stability> = Stable
+}
+stable class SchoolItem {
+  stable val id: String
+  stable val name: String
+  stable val province: String
+  stable val city: String
+  stable val tier: String
+  stable val majorCode: String
+  stable val majorName: String
+  stable val scoreLast: Int
+  stable val scorePrev: Int
+  stable val quota: Int
+  stable val applicants: Int
+  stable val mathRequired: Boolean
+  stable val tags: String
+  stable val note: String
+  <runtime stability> = Stable
+}
+unstable class SiteCatalog {
+  stable val CNKI: ResearchSite
+  stable val WANFANG: ResearchSite
+  stable val CQVIP: ResearchSite
+  stable val GOOGLE_SCHOLAR: ResearchSite
+  stable val SEMANTIC_SCHOLAR: ResearchSite
+  stable val ARXIV: ResearchSite
+  stable val PUBMED: ResearchSite
+  stable val DOAJ: ResearchSite
+  stable val CORE: ResearchSite
+  stable val BAIDU_XUESHU: ResearchSite
+  stable val CNIPA: ResearchSite
+  stable val SOOPAT: ResearchSite
+  stable val OPEN_STD: ResearchSite
+  stable val ICourse163: ResearchSite
+  stable val XUETANGX: ResearchSite
+  stable val SMARTEDU: ResearchSite
+  stable val KAOYAN_BANG: ResearchSite
+  stable val BILIBILI: ResearchSite
+  stable val CHAOXING: ResearchSite
+  stable val KAOYAN_CN: ResearchSite
+  stable val MIT_OCW: ResearchSite
+  stable val COURSERA: ResearchSite
+  stable val EDX: ResearchSite
+  stable val NETEASE_OPEN: ResearchSite
+  stable val YZ_CHSI: ResearchSite
+  stable val CDGDC: ResearchSite
+  stable val NEEA: ResearchSite
+  stable val SDZK: ResearchSite
+  unstable val all: List<ResearchSite>
+  <runtime stability> = Unstable
+}
+stable class AppDatabase {
+  <runtime stability> = Stable
+}
+stable class KaoyanAiClient {
+  <runtime stability> = Stable
+}
+unstable class Ok {
+  unstable val schools: List<SchoolItem>
+  <runtime stability> = Unstable
+}
+stable class Failed {
+  stable val message: String
+  <runtime stability> = Stable
+}
+stable class Ok {
+  stable val text: String
+  <runtime stability> = Stable
+}
+stable class Failed {
+  stable val message: String
+  <runtime stability> = Stable
+}
+stable class KaoyanFetcher {
+  <runtime stability> = Stable
+}
+unstable class Obj {
+  unstable val fields: Map<String, Value>
+  <runtime stability> = Unstable
+}
+unstable class Arr {
+  unstable val items: List<Value>
+  <runtime stability> = Unstable
+}
+stable class Str {
+  stable val value: String
+  <runtime stability> = Stable
+}
+stable class Num {
+  stable val value: Double
+  <runtime stability> = Stable
+}
+stable class Bool {
+  stable val value: Boolean
+  <runtime stability> = Stable
+}
+stable class Null {
+  <runtime stability> = Stable
+}
+stable class MiniJson {
+  <runtime stability> = Stable
+}
+stable class TermEntity {
+  stable val id: Long
+  stable val name: String
+  stable val startDate: String
+  stable val totalWeeks: Int
+  stable val campus: String
+  stable val active: Boolean
+  <runtime stability> = Stable
+}
+stable class CourseEventEntity {
+  stable val id: Long
+  stable val termId: Long
+  stable val name: String
+  stable val teacher: String
+  stable val room: String
+  stable val dayOfWeek: Int
+  stable val startPeriod: Int
+  stable val endPeriod: Int
+  stable val weekRaw: String
+  stable val weeks: String
+  stable val colorSeed: Int
+  <runtime stability> = Stable
+}
+stable class ExamEntity {
+  stable val id: Long
+  stable val termId: Long
+  stable val course: String
+  stable val date: String
+  stable val time: String
+  stable val room: String
+  stable val seat: String
+  stable val note: String
+  <runtime stability> = Stable
+}
+stable class GradeEntity {
+  stable val id: Long
+  stable val termId: Long
+  stable val termName: String
+  stable val course: String
+  stable val credit: Double
+  stable val score: Double
+  stable val gpa: Double
+  stable val kind: String
+  <runtime stability> = Stable
+}
+stable class KaoyanSchoolEntity {
+  stable val id: String
+  stable val name: String
+  stable val province: String
+  stable val city: String
+  stable val tier: String
+  stable val majorCode: String
+  stable val majorName: String
+  stable val scoreLast: Int
+  stable val scorePrev: Int
+  stable val quota: Int
+  stable val applicants: Int
+  stable val mathRequired: Boolean
+  stable val tags: String
+  stable val note: String
+  <runtime stability> = Stable
+}
+unstable class AppSettings {
+  stable val campus: Campus
+  stable val termName: String
+  stable val startMonday: String
+  stable val totalWeeks: Int
+  stable val remindEnabled: Boolean
+  stable val remindMinutesBefore: Int
+  stable val silenceEnabled: Boolean
+  stable val silenceMode: SilenceMode
+  unstable val dayOverrides: List<DayOverride>
+  stable val dynamicColor: Boolean
+  stable val uiStyle: UiStyle
+  stable val glassEffect: GlassEffect
+  stable val floatingBottomBar: Boolean
+  stable val performanceMode: Boolean
+  stable val kbUrl: String
+  stable val examUrl: String
+  stable val gradeUrl: String
+  stable val aiBaseUrl: String
+  stable val aiApiKey: String
+  stable val aiModel: String
+  stable val kaoyanCatalogUrl: String
+  stable val kaoyanFavorites: String
+  <runtime stability> = Unstable
+}
+unstable class SettingsStore {
+  unstable val context: Context
+  unstable val defaultPerformanceMode$delegate: Lazy<Boolean>
+  unstable val flow: Flow<AppSettings>
+  <runtime stability> = Unstable
+}
+stable class QzEndpoints {
+  stable val BASE: String
+  stable val HOME: String
+  stable val TIMETABLE: String
+  stable val EXAMS: String
+  stable val GRADES: String
+  <runtime stability> = Stable
+}
+stable class QzJs {
+  stable val EXTRACT_FN: String
+  stable val FIND_LINKS_FN: String
+  stable val LOGIN_STATE_FN: String
+  stable val DIAG_FN: String
+  stable val PAGE_HTML_FN: String
+  <runtime stability> = Stable
+}
+unstable class QzPayload {
+  stable val ok: Boolean
+  stable val kind: String
+  stable val url: String
+  unstable val headers: List<String>
+  unstable val rows: List<List<String>>
+  unstable val rowspans: List<List<Int>>
+  stable val error: String
+  <runtime stability> = Unstable
+}
+stable class QzJson {
+  <runtime stability> = Stable
+}
+unstable class CellEntry {
+  stable val name: String
+  stable val teacher: String
+  stable val room: String
+  unstable val weeks: WeekPattern
+  stable val startPeriod: Int?
+  stable val endPeriod: Int?
+  <runtime stability> = Unstable
+}
+unstable class QzTableParser {
+  stable val TITLE_SEP: Char
+  stable val MAX_PERIOD: Int
+  unstable val DASH_LINE: Regex
+  unstable val PERIOD_RANGE: Regex
+  unstable val PERIOD_SINGLE: Regex
+  unstable val ANY_NUMBER: Regex
+  unstable val WEEK_HINT: Regex
+  unstable val DAY_TOKENS: List<Pair<String, Int>>
+  unstable val PERIOD_ONLY_LINE: Regex
+  unstable val DATE_RE: Regex
+  unstable val TIME_RE: Regex
+  <runtime stability> = Unstable
+}
+unstable class KaoyanRepository {
+  unstable val context: Context
+  stable val db: AppDatabase
+  unstable val settings: SettingsStore
+  stable val fetcher: KaoyanFetcher
+  stable val ai: KaoyanAiClient
+  unstable val settingsFlow: Flow<AppSettings>
+  <runtime stability> = Unstable
+}
+stable class Ok {
+  stable val count: Int
+  <runtime stability> = Stable
+}
+stable class Failed {
+  stable val message: String
+  <runtime stability> = Stable
+}
+stable class IngestResult {
+  stable val count: Int
+  stable val message: String
+  stable val termId: Long
+  <runtime stability> = Stable
+}
+unstable class TimetableRepository {
+  unstable val context: Context
+  stable val db: AppDatabase
+  unstable val settings: SettingsStore
+  unstable val settingsFlow: Flow<AppSettings>
+  <runtime stability> = Unstable
+}
+unstable class CourseEvent {
+  stable val id: Long
+  stable val name: String
+  stable val teacher: String
+  stable val room: String
+  stable val dayOfWeek: Int
+  stable val startPeriod: Int
+  stable val endPeriod: Int
+  unstable val pattern: WeekPattern
+  <runtime stability> = Unstable
+}
+stable class ExamItem {
+  stable val course: String
+  stable val date: String
+  stable val time: String
+  stable val room: String
+  stable val seat: String
+  <runtime stability> = Stable
+}
+stable class GradeItem {
+  stable val term: String
+  stable val course: String
+  stable val credit: Double
+  stable val score: Double
+  stable val gpa: Double
+  stable val kind: String
+  <runtime stability> = Stable
+}
+stable class Spec {
+  stable val courseName: String
+  stable val room: String
+  stable val teacher: String
+  stable val startPeriod: Int
+  stable val endPeriod: Int
+  stable val campusLabel: String
+  stable val minutesBefore: Int
+  <runtime stability> = Stable
+}
+unstable class ClassNotification {
+  stable val EXTRA_COURSE: String
+  stable val EXTRA_ROOM: String
+  stable val EXTRA_TEACHER: String
+  stable val EXTRA_START: String
+  stable val EXTRA_END: String
+  stable val EXTRA_CAMPUS: String
+  stable val EXTRA_MINUTES: String
+  unstable val HM: DateTimeFormatter
+  stable val PREF: String
+  stable val KEY_SPEC: String
+  <runtime stability> = Unstable
+}
+stable class ReminderReceiver {
+  <runtime stability> = Stable
+}
+stable class BootReceiver {
+  <runtime stability> = Stable
+}
+unstable class ReminderScheduler {
+  unstable val context: Context
+  unstable val repo: TimetableRepository
+  unstable val scope: CoroutineScope
+  <runtime stability> = Unstable
+}
+stable class RingerModeController {
+  stable val PREF: String
+  stable val KEY_ACTIVE: String
+  stable val KEY_PREVIOUS: String
+  stable val KEY_APPLIED: String
+  stable val KEY_UNTIL: String
+  <runtime stability> = Stable
+}
+stable class ScheduledAlarms {
+  stable val PREF: String
+  stable val KEY_REMINDER: String
+  stable val KEY_SILENCE: String
+  <runtime stability> = Stable
+}
+stable class SilenceActionReceiver {
+  <runtime stability> = Stable
+}
+stable class SilencePlan {
+  stable val MINUTES_PER_DAY: Long
+  <runtime stability> = Stable
+}
+stable class SilenceReceiver {
+  <runtime stability> = Stable
+}
+unstable class SilenceScheduler {
+  unstable val context: Context
+  unstable val repo: TimetableRepository
+  unstable val scope: CoroutineScope
+  <runtime stability> = Unstable
+}
+unstable class MainViewModel {
+  unstable val repo: TimetableRepository
+  unstable val reminders: ReminderScheduler
+  unstable val silence: SilenceScheduler
+  unstable val kaoyan: KaoyanRepository
+  unstable val settings: StateFlow<AppSettings>
+  unstable val activeTerm: StateFlow<TermEntity?>
+  unstable val courses: StateFlow<List<CourseEvent>>
+  unstable val exams: StateFlow<List<ExamEntity>>
+  unstable val grades: StateFlow<List<GradeEntity>>
+  unstable val _weekOverride: MutableStateFlow<Int>
+  unstable val weekOverride: StateFlow<Int>
+  unstable val _toast: MutableStateFlow<String?>
+  unstable val toast: StateFlow<String?>
+  <runtime stability> = Unstable
+}
+stable class Term {
+  stable val name: String
+  stable val stats: GradeStats
+  <runtime stability> = Stable
+}
+stable class Course {
+  stable val entity: GradeEntity
+  <runtime stability> = Stable
+}
+stable class KaoyanCardUi {
+  stable val id: String
+  stable val tier: Ambition
+  stable val schoolName: String
+  stable val tierBadge: String
+  stable val locationLine: String
+  stable val majorLine: String
+  stable val metricsLine: String
+  stable val score: Int
+  stable val scoreFraction: Float
+  unstable val reasons: List<String>
+  unstable val warnings: List<String>
+  stable val tagsLine: String
+  stable val noteLine: String
+}
+stable class Header {
+  stable val tier: Ambition
+  stable val count: Int
+  <runtime stability> = Stable
+}
+stable class Item {
+  stable val card: KaoyanCardUi
+  <runtime stability> = Stable
+}
+stable class Idle {
+  <runtime stability> = Stable
+}
+stable class Loading {
+  <runtime stability> = Stable
+}
+stable class Ok {
+  stable val text: String
+  <runtime stability> = Stable
+}
+unstable class KaoyanViewModel {
+  unstable val repo: KaoyanRepository
+  unstable val settings: StateFlow<AppSettings>
+  unstable val schools: StateFlow<List<SchoolItem>>
+  unstable val favorites: StateFlow<Set<String>>
+  unstable val _profile: MutableStateFlow<KaoyanProfile>
+  unstable val profile: StateFlow<KaoyanProfile>
+  unstable val recommendations: StateFlow<List<Recommendation>>
+  unstable val recommendCards: StateFlow<List<KaoyanCardUi>>
+  unstable val _aiAnswer: MutableStateFlow<AiState>
+  unstable val aiAnswer: StateFlow<AiState>
+  unstable val _aiError: MutableStateFlow<String?>
+  unstable val aiError: StateFlow<String?>
+  unstable val _busy: MutableStateFlow<Boolean>
+  unstable val busy: StateFlow<Boolean>
+  unstable val _toast: MutableStateFlow<String?>
+  unstable val toast: StateFlow<String?>
+  <runtime stability> = Unstable
+}
+unstable class QauMotion {
+  stable val EmphasizedDecel: CubicBezierEasing
+  stable val Standard: CubicBezierEasing
+  stable val EmphasizedAccel: CubicBezierEasing
+  unstable val Spatial: FiniteAnimationSpec<Float>
+  unstable val SpatialFast: FiniteAnimationSpec<Float>
+  unstable val SpatialSlow: FiniteAnimationSpec<Float>
+  unstable val ScaleSpringy: FiniteAnimationSpec<Float>
+  unstable val Effects: FiniteAnimationSpec<Float>
+  unstable val EffectsFast: FiniteAnimationSpec<Float>
+  unstable val SlideSpatial: FiniteAnimationSpec<IntOffset>
+  unstable val SlideSpatialFast: FiniteAnimationSpec<IntOffset>
+  stable val ENTER_SCALE: Float
+  stable val ENTER_OFFSET: Dp
+  stable val SELECTED_ICON_SCALE: Float
+  stable val STAGGER_STEP_MS: Int
+  stable val STAGGER_MAX_INDEX: Int
+  stable val PARALLAX_EXIT_FRACTION: Float
+  <runtime stability> = Unstable
+}
+stable class CrashLogger {
+  stable val FILE_NAME: String
+  <runtime stability> = Stable
+}
+stable class TimetableWidgetProvider {
+  <runtime stability> = Stable
+}

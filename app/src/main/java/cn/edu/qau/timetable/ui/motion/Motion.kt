@@ -223,6 +223,23 @@ fun <T> motionOf(spec: FiniteAnimationSpec<T>): FiniteAnimationSpec<T> =
  *
  * 位移用 [QauMotion.Spatial]，透明度直接取同一个进度：因为 Spatial 几乎不过冲，
  * clamp 之后不会出现"先透后实"的闪烁。
+ *
+ * ## 为什么这里要「不播时一行都不做」（v3.5 性能改动）
+ *
+ * 以前这个函数无条件 `remember { Animatable }` + 无条件 `graphicsLayer {}`。
+ * 于是**每一个调用点**（考研页每张结果卡、今日页每节课、设置页每张卡、
+ * 课表网格每个格子）都常驻一份动画状态和一个图层：动画早就结束了，
+ * `graphicsLayer` 的 lambda 还挂在绘制树上，列表一滚、父级一重组就是几十上百个
+ * 图层的重新求值。用户报的「文本多的界面掉帧」里有相当一部分是这么来的。
+ *
+ * 现在分三种情况：
+ *  1. **不需要播**（系统关了动画 / entrance 窗口已关）→ 直接 `return this`，
+ *     没有 Animatable、没有 graphicsLayer、没有 LaunchedEffect。
+ *     这是滚动时最重要的一条：LazyColumn 滚回来重建的项走的就是这条路。
+ *  2. **正在播** → 挂 graphicsLayer，逐帧读进度。
+ *  3. **播完了** → `animating` 翻 false，修饰符链上把它**摘掉**。
+ *     此时 alpha=1 / 位移=0 / 缩放=1，摘掉前后画面完全等价，
+ *     但绘制树从此少一个图层。
  */
 @Composable
 fun Modifier.staggeredAppear(
@@ -231,17 +248,25 @@ fun Modifier.staggeredAppear(
     animate: Boolean = true,
 ): Modifier {
     val enabled = LocalMotionEnabled.current && animate
-    val progress = remember(key) { Animatable(if (enabled) 0f else 1f) }
 
-    LaunchedEffect(key, enabled) {
-        if (!enabled) {
-            progress.snapTo(1f)
-            return@LaunchedEffect
-        }
+    // ① 不用播：零开销。注意这里必须在 remember 之前返回 ——
+    //    「少建一个 Animatable」本身就是这次优化的一部分。
+    if (!enabled) return this
+
+    val progress = remember(key) { Animatable(0f) }
+
+    // ② 正在播的标记。播完置 false，下面直接从修饰符链里退出。
+    var animating by remember(key) { mutableStateOf(true) }
+
+    LaunchedEffect(key) {
         val delayMs = index.coerceIn(0, QauMotion.STAGGER_MAX_INDEX) * QauMotion.STAGGER_STEP_MS
         if (delayMs > 0) delay(delayMs.toLong())
         progress.animateTo(1f, QauMotion.Spatial)
+        // 只在弹簧真正收敛后摘图层：中途摘掉会让元素"啪"地跳到终值。
+        animating = false
     }
+
+    if (!animating) return this
 
     return this.graphicsLayer {
         val p = progress.value.coerceIn(0f, 1f)

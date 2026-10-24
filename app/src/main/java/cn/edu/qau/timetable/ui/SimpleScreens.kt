@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -62,16 +63,29 @@ fun TodayScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
 
     val campus: Campus = term?.toDomain()?.campus ?: settings.campus
     val week = vm.currentWeek()
-    val today = LocalDate.now()
-    val ownDay = today.dayOfWeek.value
-    // 调休：补课日按被借的那天的课表上课，放假日没有课
-    val override = DayOverrides.of(today, settings.dayOverrides)
-    val dow = DayOverrides.effectiveDayOfWeek(today, settings.dayOverrides)
 
-    val todayList: List<CourseEvent> = if (week > 0 && dow != null) {
-        courses.filter { it.dayOfWeek == dow && it.occursIn(week) }.sortedBy { it.startPeriod }
-    } else {
-        emptyList()
+    // 「今天」只取一次：页面存活期内不跨天，而 `LocalDate.now()` 是读系统时钟的副作用，
+    // 放在 composition 里每帧重读既没意义，又会让所有依赖它的派生值每帧都失效。
+    val today = remember { LocalDate.now() }
+    val ownDay = today.dayOfWeek.value
+
+    // 调休：补课日按被借的那天的课表上课，放假日没有课。
+    // `override` 与 `dow` 只依赖「哪一天」+ 调休安排，一起 remember：
+    // 原来每次重组都要把 dayOverrides 线性扫两遍。
+    val (override, dow) = remember(today, settings.dayOverrides) {
+        DayOverrides.of(today, settings.dayOverrides) to
+            DayOverrides.effectiveDayOfWeek(today, settings.dayOverrides)
+    }
+
+    // 过滤 + 排序只跟「课程数据 / 周次 / 实际星期 / 调休安排」有关。
+    // 原来这段内联在 composable 体里，滚动、Snackbar、主题切换等任何重组都会
+    // 重新走一遍 filter，且 `occursIn` 每次要查 `WeekPattern.weeks` 集合。
+    val todayList: List<CourseEvent> = remember(courses, week, dow, settings.dayOverrides) {
+        if (week > 0 && dow != null) {
+            courses.filter { it.dayOfWeek == dow && it.occursIn(week) }.sortedBy { it.startPeriod }
+        } else {
+            emptyList()
+        }
     }
 
     if (week <= 0) {
@@ -145,7 +159,16 @@ fun TodayScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                 ),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                itemsIndexed(todayList) { index, course ->
+                itemsIndexed(
+                    items = todayList,
+                    // Room 主键是稳定的，滚动出视口再回来能复用同一个 item；
+                    // id 为 0（上游临时构造、还没落库）时退回「位置 + 节次格」，至少不会撞 key。
+                    key = { index, course ->
+                        if (course.id != 0L) course.id else "$index-${course.slotKey}"
+                    },
+                    // 这里只有一种卡片，显式声明 contentType 让 LazyColumn 少建一条类型分支
+                    contentType = { _, _ -> "course" },
+                ) { index, course ->
                     // 序号 +1：摘要卡已经占了 0 号，课程从下一拍接上
                     CourseRow(
                         course,
@@ -205,7 +228,12 @@ fun ExamsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         contentPadding = PaddingValues(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        itemsIndexed(exams) { index, exam ->
+        itemsIndexed(
+            items = exams,
+            // exam.id 是 Room 自增主键，全局唯一：滚动复用时动画状态不会串行。
+            key = { _, exam -> "e-${exam.id}" },
+            contentType = { _, _ -> "exam" },
+        ) { index, exam ->
             Card(Modifier.fillMaxWidth().staggeredAppear(index, animate = entrance)) {
                 Column(Modifier.padding(14.dp)) {
                     Text(exam.course, style = MaterialTheme.typography.titleSmall)
@@ -230,6 +258,16 @@ private sealed interface GradeRow {
 
 private fun creditText(v: Double): String = String.format("%.1f", v)
 
+/**
+ * 成绩页顶部的总览 + 按学期分组的行数据。
+ *
+ * 只在 [GradesScreen] 内部用，做成 private：外面不需要、也不该知道这个中间态。
+ */
+private data class GradeScreenData(
+    val stats: GradeStats,
+    val rows: List<GradeRow>,
+)
+
 @Composable
 fun GradesScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     val grades by vm.grades.collectAsState()
@@ -238,23 +276,33 @@ fun GradesScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         return
     }
 
-    // 总览：学分绩点和加权平均分是两个指标，分别给出来
-    val stats = GradeSummary.of(grades.map { GradeRecord(it.credit, it.score, it.gpa) })
+    // 总览 + 分学期明细一起算、一起缓存。
+    // 原来这三段（GradeSummary.of / groupBy / buildList，其中每个学期还要再 GradeSummary.of 一次）
+    // 全内联在 composable 体里，任何一次重组都要重算并重新分配几十个对象；
+    // 合并成单个 remember(grades)，保证同一份数据只算一次（拆成两个 remember 会漏掉「byTerm」这层重复遍历）。
+    // `byTerm` 只是这个 lambda 内部的中间量，算完就该被回收，不进 holder。
+    val data = remember(grades) {
+        // 总览：学分绩点和加权平均分是两个指标，分别给出来
+        val stats = GradeSummary.of(grades.map { GradeRecord(it.credit, it.score, it.gpa) })
 
-    // 按学期分组，每个学期各算一份 —— 这样能看出"这学期比上学期进步了没有"
-    val byTerm = grades.groupBy { it.termName }
-    val rows = buildList {
-        GradeSummary.orderTerms(byTerm.keys).forEach { term ->
-            val list = byTerm[term].orEmpty().sortedBy { it.course }
-            add(
-                GradeRow.Term(
-                    name = term.ifBlank { "未标注学期" },
-                    stats = GradeSummary.of(list.map { GradeRecord(it.credit, it.score, it.gpa) }),
+        // 按学期分组，每个学期各算一份 —— 这样能看出"这学期比上学期进步了没有"
+        val byTerm = grades.groupBy { it.termName }
+        val rows: List<GradeRow> = buildList {
+            GradeSummary.orderTerms(byTerm.keys).forEach { term ->
+                val list = byTerm[term].orEmpty().sortedBy { it.course }
+                add(
+                    GradeRow.Term(
+                        name = term.ifBlank { "未标注学期" },
+                        stats = GradeSummary.of(list.map { GradeRecord(it.credit, it.score, it.gpa) }),
+                    )
                 )
-            )
-            list.forEach { add(GradeRow.Course(it)) }
+                list.forEach { add(GradeRow.Course(it)) }
+            }
         }
+        GradeScreenData(stats = stats, rows = rows)
     }
+    val stats = data.stats
+    val rows = data.rows
 
     val entrance = rememberEntranceWindow(rows.size)
 
@@ -304,7 +352,24 @@ fun GradesScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         ),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            itemsIndexed(rows) { index, row ->
+            itemsIndexed(
+                items = rows,
+                // 「学期标题」按学期名去重（orderTerms 返回的 key 唯一，空名也只会出现一次）；
+                // 「课程」用 Room 主键。前缀区分两类行，避免学期名恰好和某个 id 撞车。
+                key = { _, row ->
+                    when (row) {
+                        is GradeRow.Term -> "t-${row.name}"
+                        is GradeRow.Course -> "c-${row.entity.id}"
+                    }
+                },
+                // 两种行高度/结构完全不同，分开声明能让 LazyColumn 按类型复用槽位
+                contentType = { _, row ->
+                    when (row) {
+                        is GradeRow.Term -> "term"
+                        is GradeRow.Course -> "course"
+                    }
+                },
+            ) { index, row ->
                 when (row) {
                     is GradeRow.Term -> TermHeader(row, index, entrance)
                     is GradeRow.Course -> GradeCourseCard(row.entity, index, entrance)

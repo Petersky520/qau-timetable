@@ -5,6 +5,178 @@
 
 ---
 
+## [青小农 Lite 1.0.0] - 2026-10-24
+
+**新增 Lite 版本：只保留课表相关功能，不含考研模块。**
+
+### 两个版本
+
+| | 青小农（完整版） | 青小农Lite |
+|---|---|---|
+| 版本 | 3.4.1 | **1.0.0** |
+| 包名 | `cn.edu.qau.timetable` | **`cn.edu.qau.timetable.lite`** |
+| 体积 | **1.74 MB** | **1.68 MB** |
+| 考研模块 | 有 | **无** |
+| 其余功能 | 课表 / 今日 / 考试 / 成绩 / 调休 / 提醒 / 静音 / 小组件 / 外观 | **完全相同** |
+
+两个版本包名不同，**可以同时安装**，互不覆盖、互不影响。
+
+Lite 点「考研」标签不会崩，会显示一句说明并引导去装完整版 ——
+功能缺席是产品选择，不该让用户当成 bug 去排查。
+
+### 体积：11.87 MB → 1.74 MB（降 85%）
+
+之前 release 一直没开 R8（`isMinifyEnabled = false`），实测 APK 里
+**dex 未压缩 43.57 MB，占整个包 96%** —— 绝大部分是 Compose / Material3 /
+material-icons-extended 里根本没被调用的代码。
+
+这次开启完整 R8（代码压缩 + 混淆 + 资源压缩）：
+
+| 指标 | 优化前 | 优化后 |
+|---|---|---|
+| APK | 11.87 MB | **1.74 MB**（完整版）|
+| dex（未压缩）| 43.57 MB / 3 个 | **2.92 MB / 1 个** |
+| dex 文件数 | 3 | 1 |
+
+### 踩到并修掉的一个真 bug
+
+开混淆后第一版规则写的是 `-keep class ...SyncScreen$QauBridge`，
+但它是 **private 嵌套类**，R8 照样重命名了 —— 实测 dex 里已经**找不到
+`QauBridge` 这个字符串**。
+
+后果很隐蔽：`@JavascriptInterface` 的方法是被网页里的 JS 按**名字**调用的，
+编译期没有任何引用关系。类名一变，JS 里 `QauBridge.post(...)` 直接调不到，
+**整个课表抓取静默失效** —— 不崩溃、不报错，只是同步永远是空的。
+
+修法经过两次迭代：
+
+1. 先用 `-keep class * { @JavascriptInterface <methods>; }` 兜底 → 功能好了，
+   但把 Compose 里所有带该注解的类整个保留了，APK 从 1.74 MB 反弹到 **2.93 MB**
+2. 最终收窄为两层：
+   ```
+   -keepclassmembers class * { @android.webkit.JavascriptInterface <methods>; }
+   -keepclasseswithmembers,allowshrinking class cn.edu.qau.timetable.ui.** {
+       @android.webkit.JavascriptInterface <methods>;
+   }
+   ```
+   只保方法名 + 只对我们的桥类保类名，体积回到 1.74 MB
+
+**验证方式**：直接看 R8 产出的 `mapping.txt`，确认
+`void post(java.lang.String) -> post` —— 映射目标仍是 `post` 而不是 `a`。
+
+其它一并保住的：Room 实体与 DAO（字段名即列名）、通知/广播/小组件
+（manifest 按类名注册）、各类枚举的 `values`/`valueOf`
+（`Campus.fromName` 这类持久化还原靠枚举名）。
+
+### Lite 怎么做到「不含考研」
+
+考研不是一个独立目录，它横穿 7 个共用文件（MainActivity 的 Tab、
+QauApp 的仓库注入、Daos 的表、Entities 的实体、SettingsStore 的字段、
+MainViewModel 的构造参数、SettingsScreen 的设置项）。直接按目录排除会编译失败。
+
+所以用 **Gradle product flavor + 单一接缝**：
+
+```
+app/src/full/.../KaoyanHost.kt   → hasKaoyan = true，渲染真的 KaoyanScreen
+app/src/lite/.../KaoyanHost.kt   → hasKaoyan = false，渲染一句说明
+```
+
+共用代码只认 `KaoyanFeature.hasKaoyan` 和 `KaoyanHost`，不再直接引用
+`KaoyanScreen`。于是 Lite 变体里整条考研依赖链从入口处就不可达，
+R8 会裁掉它们。
+
+**实测**：R8 mapping 里考研相关的类，完整版 **202 个**，Lite **183 个** ——
+被裁掉的都是 UI 与推荐引擎（21 个文件 / 3840 行），
+留下的少量是数据层（`AppDatabase` 的表定义还引用着 `KaoyanSchoolDao`，
+切断它要改数据库结构，代价不值）。
+
+Lite 的设置页也不显示「AI 搜索」卡 —— 那张卡只服务于考研问答，
+留着会让人填了密钥却找不到用处。
+
+### 测试
+
+两个变体各自跑全量单测：**各 274 用例 / 0 失败**。
+
+---
+
+## [3.5] - 2026-10-19
+
+**性能版：修掉「文本多的界面掉帧严重」。** 没有功能改动，行为与 3.4.1 一致。
+
+### 掉帧的主因：玻璃底栏每帧录整屏
+
+底栏的毛玻璃做法是「把背后内容录进一张 `GraphicsLayer`，再模糊着画出来」。
+问题在于录的是**整屏**：每一帧都要把全屏内容栅格化进一张 1080×2400 级别的离屏纹理，
+再整屏贴回屏幕。内容越重（文字越多、卡片越多），这次多出来的全屏填充越吃 GPU ——
+所以「文本多的界面」最明显，考研页、设置页、成绩页是重灾区。
+
+**改法：只录底栏背后那一条。** 玻璃面板本来也只采样自己背后那一小块
+（`GlassPanel` 拿到录像第一件事就是 `clipRect` + `translate`），
+上面 90% 的高度录了从来没被读过。现在：
+
+- 录像高度 = 底栏 + 下边距 + 手势条 + 56dp 模糊余量，**离屏纹理缩到约一成面积**；
+- 去掉「整屏纹理贴回屏幕」那一次合成，内容直接画到屏幕上；
+- 观感**不变**：玻璃采样的本来就是这一条。
+
+底带几何抽成 `ui/glass/BackdropBand.kt` 的三个纯函数，
+由 `BackdropBandTest`（7 条）钉住「底带贴底 / 不出现负值 / 录像原点与玻璃采样互补」
+—— 这几个值算错的表现是「模糊内容整体错位」，肉眼很难描述，必须靠断言防回归。
+
+### 动画修饰符：不需要播的时候一行都不做
+
+`Modifier.staggeredAppear()` 以前**无条件**建一个 `Animatable` + 挂一层
+`graphicsLayer`。于是每个调用点都常驻一份动画状态和一个图层：动画早就结束了，
+列表一滚、父级一重组就是几十上百个图层的重新求值。现在三档：
+
+| 情况 | 行为 |
+|---|---|
+| 系统关了动画 / entrance 窗口已关 | 直接 `return this`，零 Animatable、零图层 |
+| 正在播 | 挂图层，逐帧读进度 |
+| 播完了 | 自动摘掉图层（此时 alpha/位移/缩放都已是终值，等价） |
+
+### 组合期的工作量
+
+- **设置页**：原先 15 个输入框的 `mutableStateOf` 全挂在 `SettingsScreen` 里，
+  整页又是一个 `Column(verticalScroll)` —— 敲一个字，10 张卡全部重跑。
+  现在拆成 10 张独立卡，各自持有自己的草稿状态，敲字只让那一张卡重组。
+  顺带修掉一个旧毛病：改 A 项保存时不再把 B 项正在编辑的草稿冲回旧值。
+- **课表格子**：以前 77 个格子各自挂一个入场动画（换周时新旧两张网格同时组合，
+  上百个 Animatable 一起跑）。改成整张网格一次入场，换周只需 **1** 个。
+- **考研页专业 chip**：v3.4 把专业扩到 330 项，默认门类「工学」有 121 个，
+  而原来是 `Row + horizontalScroll` —— 121 个 `FilterChip` **全部进组合**（视口里只放得下 5 个）。
+  改成 `LazyRow`，只组合视口附近那几个。
+- **列表派生数据**：今日页的过滤排序、成绩页的绩点统计 + 按学期分组、
+  考试页的 key 全部进 `remember` / 补 `key`，不再每次重组重算。
+- **AI 搜索的 Loading**：Material3 的 `LinearProgressIndicator()`（无参 = 不确定态，
+  内部挂无限过渡，只要在组合里就每帧重绘）换成静态底轨。
+- 课表的 `term?.toDomain()` 以前每次重组都新建一个 `Term`，而它是三个 `remember`
+  的 key —— 等于每帧让下游重算。现在只转一次。
+
+### 一个被实验推翻的预期
+
+原本打算给 `core/` 的数据类加 `@Immutable` 来减少重组。做了对照实验后发现
+**收益远小于预期**：Kotlin 2.0.21 的 Compose 编译器默认开启 Strong Skipping，
+带 unstable 参数的函数**本来就可跳过**（关掉它，可跳过的函数从 50 掉到 23）。
+Strong Skipping 兜的是「能否跳过」，但 unstable 参数走**引用相等** ——
+真正该修的是「别在组合期新建对象」，而不是加注解。所以这一版没有往 `core/`
+塞 Compose 依赖，架构约束（纯 Kotlin 零依赖）保持不变。
+
+### 测量与验收
+
+- 新增 `-PcomposeMetrics` 开关，产出 Composables / Classes 两份编译器报告，
+  优化前后各跑一次存档在 [docs/perf](docs/perf/README.md)；
+- 可跳过的 composable：40 → **50**，且**没有任何一个**不可跳过；
+- **单测 17 套件 / 274 用例 / 0 失败**（新增 `BackdropBandTest` 7 条）；
+- `assembleDebug` 通过。
+
+> ⚠️ 本次**没有**采集真机帧率（`dumpsys gfxinfo`）。本机 Android 模拟器上
+> 应用能装，但包管理器始终解析不到 Activity（`am start` 报 `does not exist`，
+> 而 `dumpsys package` 里该 Activity 明明在），冷启动 / wipe-data / 重装都无效，
+> 属镜像问题。所以这里只声明「减少了哪些工作」，不声明「提升到多少帧」。
+> 想看帧率请用真机：`adb shell dumpsys gfxinfo cn.edu.qau.timetable framestats`。
+
+---
+
 ## [3.4.1] - 2026-10-19
 
 **换签名密钥重新出包。** 这一版没有功能改动，是一次不得不做的重新签名。

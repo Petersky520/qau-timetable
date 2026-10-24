@@ -1,24 +1,25 @@
 package cn.edu.qau.timetable.ui.kaoyan
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -32,6 +33,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
@@ -193,7 +195,26 @@ private fun AiApiPane(
                         }
                     }
                     if (answer is AiState.Loading) {
-                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        // 静态底轨，不再用 Material3 的 LinearProgressIndicator()。
+                        //
+                        // 为什么必须换掉：无参重载是**不确定态**，内部挂一条
+                        // rememberInfiniteTransition —— 只要它还在组合里，就每帧推进、
+                        // 无限重绘。AI 回答通常要等好几秒，这段时间等于拿整台设备的
+                        // 帧预算去喂一个"我没死"的信号；而且这页还有可滚动的 LazyColumn，
+                        // 那条无限过渡会让整个绘制流程一直没法进入静止态。
+                        //
+                        // 换成 4dp 高的胶囊形静态底轨（Spacer + background）：
+                        //  - 零动画、零无限过渡、没有任何子节点，画完即静止；
+                        //  - 下面那行「AI 正在整理…」已经把状态说清楚了，
+                        //    不确定态进度条本身也不携带任何可度量信息；
+                        //  - 高度/圆角/配色与 M3 进度条的底轨一致，观感不突兀。
+                        Spacer(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                        )
                         Text("AI 正在整理…", style = MaterialTheme.typography.labelSmall)
                     }
                 }

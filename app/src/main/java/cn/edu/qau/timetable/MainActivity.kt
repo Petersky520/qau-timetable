@@ -80,12 +80,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -97,6 +99,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -108,17 +111,21 @@ import cn.edu.qau.timetable.ui.SettingsScreen
 import cn.edu.qau.timetable.ui.SyncScreen
 import cn.edu.qau.timetable.ui.TimetableScreen
 import cn.edu.qau.timetable.ui.TodayScreen
+import cn.edu.qau.timetable.ui.glass.BackdropBand
 import cn.edu.qau.timetable.ui.glass.FloatingBarHeight
 import cn.edu.qau.timetable.ui.glass.FloatingBarMargin
 import cn.edu.qau.timetable.ui.glass.GlassPanel
 import cn.edu.qau.timetable.ui.glass.LocalFloatingBarReserve
-import cn.edu.qau.timetable.ui.kaoyan.KaoyanScreen
+import cn.edu.qau.timetable.ui.KaoyanFeature
+import cn.edu.qau.timetable.ui.KaoyanHost
 import cn.edu.qau.timetable.ui.motion.LocalMotionEnabled
 import cn.edu.qau.timetable.ui.motion.QauMotion
 import cn.edu.qau.timetable.ui.motion.motionOf
 import cn.edu.qau.timetable.ui.motion.rememberMotionEnabled
 import cn.edu.qau.timetable.ui.theme.QauTheme
 import cn.edu.qau.timetable.util.CrashLogger
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
 
@@ -285,7 +292,12 @@ private fun AppRoot(vm: MainViewModel, onBarHeightChange: (Dp) -> Unit) {
     // contentLayer 是"内容的一份录像"：玻璃底栏靠它才能把背后的东西模糊着画出来，
     // 因为 Compose 的 Modifier.blur() 只模糊元素自己，看不到背后。
     val contentLayer = rememberGraphicsLayer()
-    var backdropOrigin by remember { mutableStateOf(Offset.Zero) }
+    // 内容层量出来的「在哪、多大」。**不**直接存 backdropOrigin：
+    // 底带高度是算出来的（随悬浮/通栏切换、手势条内边距变化），
+    // 而 onGloballyPositioned 只在位置/尺寸变化时回调 ——
+    // 只改底带高度（尺寸没变）时那个缓存的原点就会过期，表现为模糊内容错位。
+    // 所以存原始测量值，原点每次都从它 + 当前底带高度重新推。
+    var contentBox by remember { mutableStateOf(Rect.Zero) }
     // 手势小横条占掉的高度。底栏要浮在它上面，滚动内容也要为它留出空白。
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
@@ -310,6 +322,35 @@ private fun AppRoot(vm: MainViewModel, onBarHeightChange: (Dp) -> Unit) {
     // 底栏早已不可见，可内容层仍然每帧整屏录一遍再画一遍。
     // 设置页本身就是一堆 Switch 和输入框，滚起来最吃这个亏。
     val recordBackdrop = effectiveGlass.blursBackdrop && overlay == Overlay.NONE
+
+    // ------------------------------------------------------------ 录像只录底栏那一条
+    //
+    // 玻璃底栏贴在屏幕底部，它**只采样自己背后那一条**的像素：GlassPanel 拿到录像后
+    // 做的第一件事就是 clipRect + translate，把录像里"底栏所在的那一块"裁出来。
+    // 也就是说，屏幕上方 90% 的高度录了却从来没有被读过。
+    //
+    // 但以前录的是整屏：`contentLayer.record { drawContent() }` 里 layer 的尺寸
+    // 就是内容层尺寸，`drawLayer` 再把这张整屏纹理贴回屏幕。代价是每帧：
+    //   ① 整屏内容栅格化进一张离屏纹理（约 2.6M 像素的 GPU 填充）；
+    //   ② 再把这张纹理整屏合成一次。
+    // 内容越重（文字越多、卡片越多），①的填充率越吃紧 —— 这就是"文本多的界面掉帧"。
+    //
+    // 现在把录像的高度压成「底栏 + 下边距 + 手势条 + 模糊余量」：
+    //   ① 离屏纹理缩小到约一成面积，GPU 填充与显存带宽同比例下降；
+    //   ② 去掉了"整屏纹理贴回屏幕"那一次合成 —— 内容直接画到屏幕上。
+    //
+    // 代价是内容在一次绘制里被走两遍（一遍到屏幕、一遍裁剪进底带）。
+    // 第二遍被 clipRect 限制在底带内，视口外的绘制命令会被 Skia 按边界早退，
+    // 实际栅格化的像素只有底带那一块。这个取舍是有依据的：
+    // 3.3 的实测证明"去掉整屏录屏"就能立刻恢复流畅 —— 说明瓶颈在 GPU 填充率，
+    // 而不是 CPU 侧的绘制命令下发。
+    //
+    // +56dp 是余量：底栏圆角、边框和 24dp 高斯模糊的软边都要采样到本体之外，
+    // 少这一圈会在底栏上沿看到一条没被模糊的硬边。
+    val backdropBandHeightDp: Dp = remember(settings.floatingBottomBar, navInset) {
+        BackdropBand.heightDp(settings.floatingBottomBar, navInset)
+    }
+    val backdropBandHeightPx = with(density) { backdropBandHeightDp.toPx() }
 
     // 上次崩溃过就在启动时直接把日志弹出来 —— 用户不用去设置里翻
     var crashText by remember { mutableStateOf<String?>(null) }
@@ -469,7 +510,7 @@ private fun AppRoot(vm: MainViewModel, onBarHeightChange: (Dp) -> Unit) {
                 // 登录页的学号/密码框会被键盘整个盖住。
                 .imePadding(),
         ) {
-            // 内容层：一边画到屏幕上，一边录进 graphicsLayer，供玻璃底栏取用。
+            // 内容层：画到屏幕上，**同时**只为玻璃底栏录一条"底带"。
             // 底栏在这个 Box **之外** —— 否则它会把自己也录进去、自己模糊自己。
             Box(
                 Modifier
@@ -486,10 +527,41 @@ private fun AppRoot(vm: MainViewModel, onBarHeightChange: (Dp) -> Unit) {
                     .then(
                         if (recordBackdrop) {
                             Modifier
-                                .onGloballyPositioned { backdropOrigin = it.positionInRoot() }
+                                .onGloballyPositioned { coords ->
+                                    // 只存原始测量值。底带原点在下面用 contentBox +
+                                    // 当前底带高度现算（见 contentBox 的说明）：
+                                    // 在这里直接算会漏掉「只改底带高度」的那种变化。
+                                    contentBox = Rect(
+                                        offset = coords.positionInRoot(),
+                                        size = Size(
+                                            coords.size.width.toFloat(),
+                                            coords.size.height.toFloat(),
+                                        ),
+                                    )
+                                }
                                 .drawWithContent {
-                                    contentLayer.record { this@drawWithContent.drawContent() }
-                                    drawLayer(contentLayer)
+                                    val bandH = min(backdropBandHeightPx, size.height)
+                                        .coerceAtLeast(1f)
+                                    val bandTop = BackdropBand.bandTop(size.height, bandH)
+                                    val bandW = size.width
+                                    val layerW = bandW.roundToInt().coerceAtLeast(1)
+                                    val layerH = bandH.roundToInt().coerceAtLeast(1)
+
+                                    // ① 内容照常画到屏幕上。
+                                    //    以前这一步是"录进整屏 layer、再把 layer 贴回屏幕"，
+                                    //    等于每帧强制一次全屏离屏渲染 + 一次全屏贴图。
+                                    drawContent()
+
+                                    // ② 只为底栏录一条底带：把内容整体上移 bandTop，
+                                    //    于是底栏背后那一段正好落进 size=(layerW × layerH) 的 layer。
+                                    //    底栏只采样这一条，上面的内容录了也永远用不到。
+                                    contentLayer.record(IntSize(layerW, layerH)) {
+                                        clipRect(left = 0f, top = 0f, right = bandW, bottom = bandH) {
+                                            translate(top = -bandTop) {
+                                                this@drawWithContent.drawContent()
+                                            }
+                                        }
+                                    }
                                 }
                         } else {
                             Modifier
@@ -545,7 +617,16 @@ private fun AppRoot(vm: MainViewModel, onBarHeightChange: (Dp) -> Unit) {
                         // GlassPanel 于是走纯色分支（不建模糊图层、不画录像）。
                         effect = effectiveGlass,
                         backdrop = contentLayer,
-                        backdropOrigin = backdropOrigin,
+                        // 录像里装的是「底带」，所以参考原点必须是**底带左上角**，
+                        // 不是内容层左上角 —— 传错了模糊内容会整体错开一条底带的高度。
+                        // 这里每次重组现算，而不是在 onGloballyPositioned 里缓存：
+                        // 底带高度变了（切悬浮/通栏、手势条内边距变化）但内容尺寸没变时，
+                        // 那个回调根本不会触发。
+                        backdropOrigin = BackdropBand.originInRoot(
+                            contentOrigin = contentBox.topLeft,
+                            contentHeight = contentBox.height,
+                            bandHeight = min(backdropBandHeightPx, contentBox.height),
+                        ),
                         // 录像可能是旧的（比如刚关掉性能模式）。底栏只在 recordBackdrop
                         // 为真的那些帧里才有正确的录像可画，其余时候退化成纯色块，
                         // 不会画出一份过期的画面。
@@ -657,7 +738,10 @@ private fun TabHost(
             Tab.TODAY -> TodayScreen(vm, Modifier.fillMaxSize())
             Tab.EXAMS -> ExamsScreen(vm, Modifier.fillMaxSize())
             Tab.GRADES -> GradesScreen(vm, Modifier.fillMaxSize())
-            Tab.KAOYAN -> KaoyanScreen(
+            // 走接缝而不是直接引用 KaoyanScreen：Lite 变体里这个调用点
+            // 指向的是 flavor 的 KaoyanHost 实现，考研整条依赖链因此不可达，
+            // 会被 R8 裁掉（见 app/src/{full,lite}/.../KaoyanHost.kt）。
+            Tab.KAOYAN -> KaoyanHost(
                 vm = vm,
                 modifier = Modifier.fillMaxSize(),
                 onOpenSettings = onOpenSettings,

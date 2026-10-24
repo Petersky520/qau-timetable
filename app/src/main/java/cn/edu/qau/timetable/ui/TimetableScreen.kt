@@ -97,7 +97,18 @@ fun TimetableScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     // 0 = 按日期算不出第几周（没填第 1 周周一，或日期落在学期之外）
     val realCurrent = vm.currentWeek()
     val week = if (weekOverride > 0) weekOverride else realCurrent.coerceAtLeast(1)
-    val campus = term?.toDomain()?.campus ?: settings.campus
+
+    // 领域对象只转换一次。
+    //
+    // `term?.toDomain()` 每调一次就 new 一个 Term，而它同时是 TimetableGrid 里
+    // 好几个 `remember(term, week, overrides)` 的 key。以前它在 AnimatedContent
+    // 的 content lambda 里、以及 campus 那一行各算一次 —— 换周动画期间两张网格
+    // 每帧都在重组，等于每帧白分配几个 Term 给 GC。
+    //
+    // 用 remember(term) 锁住：TermEntity 是 Room 实体，只要它没变，
+    // 传下去的 Term 就始终是同一个引用，下游所有 remember 的判定都稳定。
+    val domainTerm = remember(term) { term?.toDomain() }
+    val campus = domainTerm?.campus ?: settings.campus
 
     val slideSpec = motionOf(QauMotion.SlideSpatial)
     val slideFastSpec = motionOf(QauMotion.SlideSpatialFast)
@@ -160,7 +171,7 @@ fun TimetableScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                         courses = courses,
                         week = w,
                         campus = campus,
-                        term = term?.toDomain(),
+                        term = domainTerm,
                         overrides = settings.dayOverrides,
                     )
                 }
@@ -262,6 +273,16 @@ private fun TimetableGrid(
     term: Term?,
     overrides: List<DayOverride>,
 ) {
+    // 下面这组派生数据的 remember key 是**逐项核对过**的：
+    //   visible      <- courses, week
+    //   columnSource <- term, week, overrides
+    //   hasOverride  <- term, week, overrides
+    //   periodCount / byStart / covered <- visible（进而覆盖 courses, week）
+    //   periods      <- campus
+    // 换周过渡期间 AnimatedContent 会同时持有新旧两张网格，任何一项漏 key
+    // 都可能让退场的那张读到新一轮的数据（表现为"旧格子闪一下新内容"）。
+    // 尤其 term 必须是**稳定的同一个对象** —— 上游已经 remember 过 toDomain()，
+    // 否则每帧新建一个 Term 会让 columnSource/hasOverride 每帧重算。
     val visible = remember(courses, week) { courses.filter { it.occursIn(week) } }
 
     // 每一列（周一..周日）实际要画**哪一天**的课表：
@@ -303,6 +324,26 @@ private fun TimetableGrid(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // ------------------------------------------------------------ 入场动画
+            //
+            // 整张网格**只挂这一个**入场修饰符，格子本身不带动画。
+            //
+            // 以前是每个 CourseCell 各自 `.staggeredAppear(index = 节次 + 天, key = week)`：
+            // 一屏最多 11 节 × 7 列 ≈ 77 个格子，每格都会 remember 一个 Animatable、
+            // 再挂一层 graphicsLayer；换周时外层 AnimatedContent 还会同时组合新旧两张
+            // 网格，于是上百个 Animatable 一起跑、每帧上百次图层提交 —— 这是课表页
+            // 掉帧的主要来源，而且开销随格子数量线性增长（学校节次越多越卡）。
+            //
+            // 提到网格这一层之后，换周只会新增 **1** 个 Animatable：
+            //  - key = week 保留「翻到新一周 = 重新入场」的观感；
+            //  - 斜向错落的"波"没有了，但外层 AnimatedContent 本身就有横向推移 + 淡入，
+            //    两者叠在一起仍然是一次完整的转场，且不会因为格子空/满而忽长忽短；
+            //  - 动画结束后（Lead 对 Motion.kt 的改动）这里会直接返回原 Modifier，
+            //    静止时连图形层都不留。
+            //
+            // 挂载位置在 verticalScroll **外侧**：图层只覆盖视口大小，
+            // 不会把整张可滚动内容（更高）录进一张大纹理。
+            .staggeredAppear(0, key = week)
             .verticalScroll(rememberScrollState())
             // 底部让出悬浮底栏那一段，否则最后一节会被底栏挡住滚不出来
             .padding(bottom = LocalFloatingBarReserve.current),
@@ -411,16 +452,14 @@ private fun TimetableGrid(
                             CourseCell(
                                 course = main,
                                 extra = starts.size - 1,
+                                // 格子**不再**各自挂入场动画：整张网格的入场
+                                // 统一由外层 Column 上那一个 staggeredAppear 负责
+                                // （见上面那段注释）。这里必须保持"纯布局修饰符"，
+                                // 否则又回到每格一个 Animatable 的老路上。
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(CELL_HEIGHT * span)
-                                    .padding(1.dp)
-                                    // 错落入场：按「节次 + 天」取序号形成一道斜向的波。
-                                    // key 用周次 —— 换周时整张表是新内容，应该重新入场。
-                                    .staggeredAppear(
-                                        index = (period - 1) + (day - 1),
-                                        key = week,
-                                    ),
+                                    .padding(1.dp),
                             )
                             period += span
                         } else if (src != null && covered.contains(src to period)) {

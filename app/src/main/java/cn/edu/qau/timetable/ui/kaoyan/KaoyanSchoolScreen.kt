@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -532,11 +534,20 @@ private fun MajorSelector(
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (groups.isNotEmpty()) {
             // 第一级：门类。横向滚动，一行放下，不换行堆成墙。
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                groups.forEach { (category, list) ->
+            //
+            // 用 LazyRow 而不是 Row + horizontalScroll：后者会把**全部**子项
+            // 一次性组合、测量、绘制，视口外的也一样。门类虽然只有十几个，
+            // 但和第二级共用同一套写法，避免以后有人照着第一级把第二级改回去。
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(
+                    items = groups,
+                    // 门类枚举的 name 唯一且稳定 —— 用 label 的话万一将来出现
+                    // 两个同名门类，LazyRow 的 key 冲突会直接崩。
+                    key = { entry -> entry.first.name },
+                    contentType = { "category" },
+                ) { entry ->
+                    val category = entry.first
+                    val list = entry.second
                     FilterChip(
                         selected = category == activeCategory,
                         onClick = {
@@ -559,11 +570,23 @@ private fun MajorSelector(
                 ?: groups.firstOrNull()?.second
                 ?: majors
         }
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            visible.forEach { m ->
+        // 这里是整页最大的组合开销来源，必须懒加载。
+        //
+        // 以前是 Row(horizontalScroll) + visible.forEach { FilterChip(...) }：
+        // 专业扩到 330 项后，默认门类「工学」就有 121 个专业，一进页面
+        // **121 个 FilterChip 全部进组合**（视口里只放得下 5 个左右）。
+        // 每个 chip 都自带最小触控尺寸、indication/ripple、Surface、文本测量
+        // 和语义节点，116 个离线 chip 纯属白算，而且改任何一个意向条件都会
+        // 让这 121 个节点参与重组。
+        //
+        // LazyRow 只组合视口附近的那几个（外加少量预取），**其余一个都不建**。
+        // key 用专业枚举的 name：专业是稳定集合，换门类时节点能按 key 复用。
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(
+                items = visible,
+                key = { it.name },
+                contentType = { "major" },
+            ) { m ->
                 FilterChip(
                     selected = profile.major == m,
                     onClick = { onSelect(m) },
