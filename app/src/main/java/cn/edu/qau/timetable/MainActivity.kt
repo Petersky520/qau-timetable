@@ -201,6 +201,8 @@ private enum class Tab(
     val label: String,
     val iconSelected: ImageVector,
     val iconNormal: ImageVector,
+    /** 在 Lite 版里是否提供。false 的 Tab 在 Lite 的底栏里**完全不出现**。 */
+    val inLite: Boolean = true,
 ) {
     TIMETABLE("课表", Icons.Filled.DateRange, Icons.Outlined.DateRange),
     TODAY("今日", Icons.Filled.Today, Icons.Outlined.Today),
@@ -208,7 +210,23 @@ private enum class Tab(
     GRADES("成绩", Icons.Filled.School, Icons.Outlined.School),
     // 「考研」用书堆图标：School（学士帽）已经被成绩占用，
     // 两个标签用同一个图标会让人分不清自己在哪一页。
-    KAOYAN("考研", Icons.Filled.AutoStories, Icons.Outlined.AutoStories),
+    //
+    // Lite 版不提供这个 Tab（inLite = false）：底栏只剩四项，
+    // 布局按四项排，不是「留个位置点进去说没这功能」。
+    // 考研是独立功能域，Lite 的定位就是不含它 —— 留个空壳反而更 confusing。
+    KAOYAN("考研", Icons.Filled.AutoStories, Icons.Outlined.AutoStories, inLite = false),
+    ;
+
+    companion object {
+        /**
+         * 当前构建里实际提供的 Tab。
+         *
+         * nav bar 与 TabHost 都用它 —— 两处必须用同一份列表，
+         * 否则会出现「底栏没有、但能切过去」这种不一致。
+         */
+        fun available(): List<Tab> =
+            entries.filter { KaoyanFeature.hasKaoyan || it.inLite }
+    }
 }
 
 /**
@@ -279,6 +297,14 @@ private fun AnimatedContentTransitionScope<Overlay>.pagePush(
 private fun AppRoot(vm: MainViewModel, onBarHeightChange: (Dp) -> Unit) {
     var tab by rememberSaveable { mutableStateOf(Tab.TIMETABLE) }
     var overlay by rememberSaveable { mutableStateOf(Overlay.NONE) }
+
+    // rememberSaveable 会在进程重建时把上次的 tab 恢复回来。如果那个 tab
+    // 在当前构建里不存在（典型：Lite 版）、或者以后某个版本把某个 tab 去掉了，
+    // 恢复出来的就是一个「界面上没有、但状态里还在」的值 ——
+    // 底栏没有任何一项高亮，页面却停在那里。这里兜回第一个可用项。
+    if (tab !in Tab.available()) {
+        tab = Tab.available().first()
+    }
 
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
@@ -687,7 +713,7 @@ private fun RowScope.NavBarItems(
     overlay: Overlay,
     onSelect: (Tab) -> Unit,
 ) {
-    Tab.entries.forEach { t ->
+    Tab.available().forEach { t ->
         val selected = tab == t && overlay == Overlay.NONE
         NavigationBarItem(
             selected = selected,
