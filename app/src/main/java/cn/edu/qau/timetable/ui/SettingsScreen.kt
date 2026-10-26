@@ -57,6 +57,7 @@ import cn.edu.qau.timetable.core.GlassEffect
 import cn.edu.qau.timetable.core.SilenceMode
 import cn.edu.qau.timetable.core.UiStyle
 import cn.edu.qau.timetable.notify.RingerModeController
+import cn.edu.qau.timetable.notify.ScheduleStatus
 import cn.edu.qau.timetable.util.CrashLogger
 import java.time.Instant
 import java.time.LocalDate
@@ -458,6 +459,12 @@ private fun ReminderCard(vm: MainViewModel) {
                 "只排未来 7 天的闹钟；开机或导入课表后会自动重排。",
                 style = MaterialTheme.typography.labelSmall,
             )
+            // 上一次排程的结论。
+            //
+            // 提醒有 6 个静默早退点（开关关 / 没课表 / 第 1 周周一没填 /
+            // 课表为空 / 7 天内没课 / 精确闹钟权限被拒）。只给一个开关的话，
+            // 用户报「提醒不响」时双方都只能猜 —— 这行字直接说清卡在哪一环。
+            ScheduleStatusLine(ScheduleStatus.Kind.REMINDER, vm)
             Button(onClick = {
                 vm.setRemind(
                     enabled = remindEnabled,
@@ -546,6 +553,9 @@ private fun SilenceCard(vm: MainViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("去授予勿扰权限") }
             }
+            // 同 ReminderCard：静音也有好几个静默早退点，把上次排程结论亮出来。
+            // 尤其「重装 App 后通知策略权限被撤销」这一条，不写出来没人能想到。
+            ScheduleStatusLine(ScheduleStatus.Kind.SILENCE, vm)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SilenceMode.entries.forEach { m ->
                     FilterChip(
@@ -755,6 +765,52 @@ private fun CrashLogCard() {
                 }
             }
         }
+    }
+}
+
+/**
+ * 「上一次排程的结果」那一行。
+ *
+ * ## 为什么值得占一行字
+ *
+ * 提醒和静音都有好几个早退条件，而且**每一个都是静默 return**：
+ * 界面上开关是开着的、看起来一切正常，闹钟其实一个都没排上。
+ * 用户报「提醒不响」时，光看开关完全分不清是
+ *   ① 没排（条件不满足）② 排了没响 ③ 权限被系统拒了
+ * 这三种的修法完全不同。
+ *
+ * 把调度器的结论原样显示出来，用户自己就能看出卡在哪一环 ——
+ * 也让以后的问题报告从「不响」变成「这里写着第 1 周周一没填对」。
+ *
+ * ## 刷新时机
+ *
+ * 排程是异步的（`reschedule()` 起协程），所以不能在点击后立刻读。
+ * 这里以 `settings` 的变化为信号重读一次：任何会触发重排的操作
+ * （改开关、改提前分钟、导入课表）最终都会改变 settings，
+ * 于是读完时排程基本已经落盘。排程还没跑完时会短暂显示上一次的结论，
+ * 这对诊断足够 —— 比读不到就干脆不显示要好。
+ */
+@Composable
+private fun ScheduleStatusLine(kind: ScheduleStatus.Kind, vm: MainViewModel) {
+    val context = LocalContext.current
+    val settings by vm.settings.collectAsState()
+    // settings 只用作「重排可能已经发生」的触发器，值本身不参与显示。
+    val text = remember(settings) {
+        runCatching { ScheduleStatus.read(context, kind) }.getOrNull()
+    }
+
+    if (text.isNullOrBlank()) {
+        Text(
+            "还没排过闹钟${kind.label}。点上面的保存、或去「同步」页抓一次课表就会排。",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.outline,
+        )
+    } else {
+        Text(
+            "上次排程：$text",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 

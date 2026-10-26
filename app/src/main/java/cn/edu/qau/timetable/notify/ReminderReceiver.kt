@@ -78,5 +78,9 @@ class BootReceiver : BroadcastReceiver() {
         runCatching { RingerModeController.restore(context) }
         app.container.reminders.reschedule()
         app.container.silence.reschedule()
+        // reschedule() 是异步起协程的，两个 scheduler 各自会在跑完后重定续排闹钟；
+        // 这里再显式定一次，覆盖「两个都因为早退条件没跑到最后一行」的情况 ——
+        // 否则关掉再打开提醒的用户，重启后可能一直没有续排。
+        runCatching { ChainReceiver.schedule(context) }
     }
 }

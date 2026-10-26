@@ -86,6 +86,17 @@
             </intent-filter>
         </receiver>
 
+        <!--
+          排程续期。
+
+          提醒和静音都只排未来 7 天，这个闹钟负责在第 6 天把它们重排一次。
+          没有它的话，用户一周不打开 App 就再也没有提醒了 —— 而且毫无提示。
+          只用显式 Intent 触发，不需要 intent-filter，也不导出。
+        -->
+        <receiver
+            android:name=".notify.ChainReceiver"
+            android:exported="false" />
+
     </application>
 
 </manifest>

@@ -62,16 +62,43 @@ class SilenceScheduler(
 
         // 关掉功能、或用户撤销了「通知策略访问权限」时都不该继续排，
         // 而且要把可能残留的静音还原掉 —— 否则手机会一直哑着。
-        if (!settings.silenceEnabled || !RingerModeController.isGranted(context)) {
+        //
+        // 这两种情况要分开报：一个是用户自己关的，另一个是他不知道要去授权。
+        // 「通知策略访问权限」在卸载重装后会被系统撤销，是最容易被误当成 bug 的一种，
+        // 所以这里把原因写清楚，设置页会原样显示。
+        if (!settings.silenceEnabled) {
             RingerModeController.restore(context)
+            ScheduleStatus.save(context, ScheduleStatus.Kind.SILENCE, "静音开关是关的")
+            return
+        }
+        if (!RingerModeController.isGranted(context)) {
+            RingerModeController.restore(context)
+            ScheduleStatus.save(
+                context, ScheduleStatus.Kind.SILENCE,
+                "没有「通知策略访问权限」—— 去设置里点「去授予」开一下（重装 App 后要重新授权）",
+            )
             return
         }
 
-        val termEntity = repo.activeTermEntity() ?: return
+        val termEntity = repo.activeTermEntity()
+        if (termEntity == null) {
+            ScheduleStatus.save(context, ScheduleStatus.Kind.SILENCE, "还没有课表：先在「同步」页抓一次")
+            return
+        }
         // 学期行可能还没填「第 1 周周一」（算不出周次），这时排不了静音
-        val term = termEntity.toDomain() ?: return
+        val term = termEntity.toDomain()
+        if (term == null) {
+            ScheduleStatus.save(
+                context, ScheduleStatus.Kind.SILENCE,
+                "第 1 周周一没填对，算不出现在第几周 —— 去「学期」卡里补上",
+            )
+            return
+        }
         val courses = repo.coursesNow(termEntity.id)
-        if (courses.isEmpty()) return
+        if (courses.isEmpty()) {
+            ScheduleStatus.save(context, ScheduleStatus.Kind.SILENCE, "本学期课表是空的")
+            return
+        }
 
         val today = LocalDate.now()
         val now = LocalDateTime.now()
@@ -102,6 +129,16 @@ class SilenceScheduler(
         }
 
         ScheduledAlarms.save(context, ScheduledAlarms.KEY_SILENCE, scheduled)
+        // 同 ReminderScheduler：7 天窗口用完后必须有东西续上，见 ChainReceiver。
+        runCatching { ChainReceiver.schedule(context) }
+        ScheduleStatus.save(
+            context, ScheduleStatus.Kind.SILENCE,
+            if (scheduled.isEmpty()) {
+                "未来 7 天没有可静音的课时（放假、或课都在今天更早的时间）"
+            } else {
+                "已排 ${scheduled.size} 个静音/还原闹钟（${mode.label}）"
+            },
+        )
     }
 
     private fun scheduleOne(
