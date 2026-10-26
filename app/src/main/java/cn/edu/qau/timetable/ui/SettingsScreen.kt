@@ -459,6 +459,24 @@ private fun ReminderCard(vm: MainViewModel) {
                 "只排未来 7 天的闹钟；开机或导入课表后会自动重排。",
                 style = MaterialTheme.typography.labelSmall,
             )
+            // 音效开关。
+            //
+            // 单独一行而不是塞进上面那个「保存提醒设置」按钮：音效是**立即生效**的
+            // （切了立刻重建通知渠道），跟「提前多少分钟」那种要保存才落盘的字段
+            // 语义不同。混在一起用户会以为改完还得再点一次保存。
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("奶龙捧腹大笑音效", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "关掉则用系统默认提示音。",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+                Switch(
+                    checked = settings.remindSoundEnabled,
+                    onCheckedChange = { vm.setRemindSound(it) },
+                )
+            }
             // 上一次排程的结论。
             //
             // 提醒有 6 个静默早退点（开关关 / 没课表 / 第 1 周周一没填 /

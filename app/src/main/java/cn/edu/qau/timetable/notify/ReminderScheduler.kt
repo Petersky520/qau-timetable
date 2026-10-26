@@ -40,6 +40,15 @@ class ReminderScheduler(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /**
+     * 按音效开关准备好通知渠道，并删掉另一个。
+     *
+     * 暴露给 ViewModel 用：切换音效时必须立刻重建渠道（音效是渠道属性、
+     * 创建后不可改），而 ViewModel 没有 Context，由这里代劳。
+     */
+    fun prepareChannel(funny: Boolean): String =
+        ReminderReceiver.ensureChannel(context, funny)
+
     fun reschedule() {
         scope.launch {
             runCatching { doReschedule() }

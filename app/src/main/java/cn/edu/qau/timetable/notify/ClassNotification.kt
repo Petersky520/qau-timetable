@@ -12,6 +12,7 @@ import cn.edu.qau.timetable.MainActivity
 import cn.edu.qau.timetable.R
 import cn.edu.qau.timetable.core.Campus
 import cn.edu.qau.timetable.core.PeriodTimes
+import kotlinx.coroutines.flow.first
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -84,13 +85,28 @@ internal object ClassNotification {
 
     /** 按**当前真实铃声状态**渲染并投递。 */
     suspend fun post(context: Context, spec: Spec) {
-        ReminderReceiver.ensureChannel(context)
+        // 渠道要按当前的音效设置准备：Android 8+ 的音效绑在渠道上，
+        // 用错渠道 = 用户开了奶龙音效也听不到。
+        val funny = runCatching { readFunnySoundSetting(context) }.getOrDefault(false)
+        val channelId = ReminderReceiver.ensureChannel(context, funny)
         runCatching {
             NotificationManagerCompat.from(context)
-                .notify(spec.id, build(context, spec, silencedUntilText(context)))
+                .notify(spec.id, build(context, spec, silencedUntilText(context), channelId))
         }
         remember(context, spec)
     }
+
+    /**
+     * 从 DataStore 读音效开关。
+     *
+     * 这里不走注入的 repository，是因为 [post] 被广播接收器直接调用，
+     * 拿不到 ViewModel 那一层；而建一个 SettingsStore 只是包一层 DataStore，
+     * 开销可以忽略（它本身是无状态的）。
+     */
+    private suspend fun readFunnySoundSetting(context: Context): Boolean =
+        cn.edu.qau.timetable.data.prefs.SettingsStore(context.applicationContext)
+            .flow.first()
+            .remindSoundEnabled
 
     /**
      * 铃声被别的路径改动后（课自动静音 / 到点自动还原），
@@ -134,6 +150,7 @@ internal object ClassNotification {
         context: Context,
         spec: Spec,
         silencedUntil: String?,
+        channelId: String = ReminderReceiver.CHANNEL_ID,
     ): Notification {
         val campus = Campus.fromName(spec.campusLabel)
         val detail = buildString {
@@ -156,7 +173,7 @@ internal object ClassNotification {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val builder = NotificationCompat.Builder(context, ReminderReceiver.CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_class)
             .setContentTitle("${spec.minutesBefore} 分钟后上课：${spec.courseName}")
             .setContentText(body)

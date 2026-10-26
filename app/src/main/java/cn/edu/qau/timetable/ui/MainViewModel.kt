@@ -157,8 +157,26 @@ class MainViewModel(
 
     fun setRemind(enabled: Boolean, minutesBefore: Int) = safeLaunch {
         repo.settings.setRemind(enabled, minutesBefore)
+        val funny = repo.settingsFlow.first().remindSoundEnabled
+        // 渠道要跟着音效设置准备好 —— 音效绑在渠道上且创建后不可改，
+        // 见 ReminderReceiver.ensureChannel 的 KDoc。走 scheduler 是因为
+        // 它持有 Context，而 ViewModel 不该为了这点事再拿一份。
+        runCatching { reminders.prepareChannel(funny) }
         reminders.reschedule()
         _toast.value = if (enabled) "已开启上课提醒" else "已关闭上课提醒"
+    }
+
+    /**
+     * 切换提醒音效：奶龙捧腹大笑 / 系统默认。
+     *
+     * 写完设置**必须立刻重建渠道**。Android 8.0+ 起通知音效是渠道的属性，
+     * 而且渠道创建后音效就锁死了 —— 只改设置不重建渠道的话，
+     * 用户下次听到的还是旧声音，会以为开关坏了。
+     */
+    fun setRemindSound(enabled: Boolean) = safeLaunch {
+        repo.settings.setRemindSound(enabled)
+        runCatching { reminders.prepareChannel(enabled) }
+        _toast.value = if (enabled) "提醒音效：奶龙捧腹大笑" else "提醒音效：系统默认"
     }
 
     fun setUrls(kb: String, exam: String, grade: String) = safeLaunch {

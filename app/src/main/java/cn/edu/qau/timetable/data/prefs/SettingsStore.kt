@@ -32,6 +32,26 @@ data class AppSettings(
     val remindEnabled: Boolean = false,
     val remindMinutesBefore: Int = 15,
     /**
+     * 上课提醒是否用「奶龙捧腹大笑」音效，而不是系统默认提示音。
+     *
+     * ## 为什么默认关闭
+     *
+     * 这是一个**明显吵**的音效。默认开会让所有用户都被它吓一跳，
+     * 而且上课时通知突然大笑在教室里非常尴尬。
+     * 想要的人自己去打开 —— 默认值是产品态度，不是技术限制。
+     *
+     * ## 为什么改了它要重建通知渠道
+     *
+     * Android 8.0+ 起，通知音效是**渠道（NotificationChannel）的属性**，
+     * 而且渠道一旦创建，音效/震动/重要性就**不能再修改** ——
+     * 系统会直接忽略后续的修改请求（这是 Android 的硬规则，不是 App 偷懒）。
+     *
+     * 所以切换这个开关时，[cn.edu.qau.timetable.notify.ReminderReceiver.ensureChannel]
+     * 会用一个不同的渠道 id 重建渠道。旧渠道删掉：
+     * 不删的话设置里会堆积一串「上课提醒」条目，用户分不清哪个是活的。
+     */
+    val remindSoundEnabled: Boolean = false,
+    /**
      * 上课自动静音。
      * 默认**关闭** —— 它会改动系统铃声，必须由用户主动开启，
      * 而且还需要用户去系统设置里授予「通知策略访问权限」。
@@ -157,6 +177,7 @@ class SettingsStore(private val context: Context) {
             totalWeeks = p[KEY_WEEKS] ?: 20,
             remindEnabled = p[KEY_REMIND] ?: false,
             remindMinutesBefore = p[KEY_REMIND_MIN] ?: 15,
+            remindSoundEnabled = p[KEY_REMIND_SOUND] ?: false,
             silenceEnabled = p[KEY_SILENCE] ?: false,
             silenceMode = SilenceMode.fromName(p[KEY_SILENCE_MODE]),
             dayOverrides = DayOverrides.decode(p[KEY_DAY_OVERRIDES].orEmpty()),
@@ -189,6 +210,16 @@ class SettingsStore(private val context: Context) {
     suspend fun setRemind(enabled: Boolean, minutesBefore: Int) = edit {
         it[KEY_REMIND] = enabled
         it[KEY_REMIND_MIN] = minutesBefore
+    }
+
+    /**
+     * 切换提醒音效。
+     *
+     * 调用方（MainViewModel）在写完之后要**重建通知渠道** ——
+     * Android 8.0+ 的音效绑在渠道上且创建后不可改，改设置不重建渠道等于没生效。
+     */
+    suspend fun setRemindSound(enabled: Boolean) = edit {
+        it[KEY_REMIND_SOUND] = enabled
     }
 
     suspend fun setSilence(enabled: Boolean, mode: SilenceMode) = edit {
@@ -268,6 +299,7 @@ class SettingsStore(private val context: Context) {
         val KEY_WEEKS = intPreferencesKey("term_weeks")
         val KEY_REMIND = booleanPreferencesKey("remind_enabled")
         val KEY_REMIND_MIN = intPreferencesKey("remind_minutes")
+        val KEY_REMIND_SOUND = booleanPreferencesKey("remind_sound_enabled")
         val KEY_SILENCE = booleanPreferencesKey("silence_enabled")
         val KEY_SILENCE_MODE = stringPreferencesKey("silence_mode")
         val KEY_DAY_OVERRIDES = stringPreferencesKey("day_overrides")
