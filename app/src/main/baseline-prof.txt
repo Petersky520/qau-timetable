@@ -1,0 +1,70 @@
+# 青小农自有的 Baseline Profile 补充条目
+#
+# ## 这个文件是干什么的
+#
+# Android 的 Baseline Profile 告诉 ART：App 启动和常用路径上哪些方法值得**预先编译**，
+# 这样冷启动时不用边解释边编译。Compose、Lifecycle、Kotlin 这些库**自带**了
+# baseline profile（依赖包里带 `baseline-prof.txt`，AGP 会自动合并）——
+# 实测合并后已有 9,363 行，但其中只有 4 条是我们自己的类。
+#
+# 也就是说：库那部分的启动优化**已经在生效**，缺的是我们自己的热点路径。
+# 这个文件补的就是那一块。
+#
+# ## 为什么是手写的，而不是 macrobenchmark 生成的
+#
+# 标准做法是加一个 `:benchmark` 模块、连**真机**跑 Macrobenchmark、
+# 生成准确的 profile。当前环境没有可用的真机，所以先手写一份保守的版本。
+#
+# 手写的局限：它靠"读代码推断哪些方法在启动路径上"，不像自动生成那样覆盖
+# 真实执行轨迹。所以只列**确定会执行**的入口与首屏路径，宁可少列
+# （漏掉的会被 JIT 补上，只是慢一点），不乱列（列错的会白占编译预算）。
+#
+# ## 怎么换成自动生成的版本（将来有真机时）
+#
+#   1. settings.gradle.kts 加 `include(":benchmark")`
+#   2. benchmark 模块用 `com.android.test` + `androidx.benchmark.macro.junit4`
+#   3. 跑 `./gradlew :benchmark:generateBaselineProfile`
+#   4. 产物覆盖到 app/src/main/baseline-prof.txt
+#
+# ## 语法（踩过的坑）
+#
+#   L<类>;                               整个类（小类用这个就够）
+#   HSPL<类>;-><方法签名>                 方法规则，**必须带 H/S/P 标志**
+#   PL<类>;-><方法签名>                   只标 P（启动路径）
+#
+# 只写 `L类;->方法` 会报错：
+#   "At least one of flags 'H', 'S', 'P' must be specified for a method rule"
+# 这里统一用 `HSP` —— 同时标记 Hot（热点）、Startup（启动）、Post-startup，
+# 是 ART 里最"全力优化"的一档。对启动路径上的方法没有理由保守。
+
+# ---------------------------------------------------------------- Application 启动
+HSPLcn/edu/qau/timetable/QauApp;-><init>()V
+HSPLcn/edu/qau/timetable/QauApp;->onCreate()V
+HSPLcn/edu/qau/timetable/AppContainer;-><init>(Landroid/content/Context;)V
+
+# AppContainer 的 by lazy 访问器：启动时不一定全部触发，
+# 但 getDb / getSettings / getRepo 几乎必然被 ViewModel 拉起来。
+HSPLcn/edu/qau/timetable/AppContainer;->getSettings()Lcn/edu/qau/timetable/data/prefs/SettingsStore;
+HSPLcn/edu/qau/timetable/AppContainer;->getRepo()Lcn/edu/qau/timetable/data/repo/TimetableRepository;
+HSPLcn/edu/qau/timetable/AppContainer;->getDb()Lcn/edu/qau/timetable/data/db/AppDatabase;
+
+# ---------------------------------------------------------------- Activity 与首屏
+HSPLcn/edu/qau/timetable/MainActivity;-><init>()V
+HSPLcn/edu/qau/timetable/MainActivity;->onCreate(Landroid/os/Bundle;)V
+
+# ---------------------------------------------------------------- 首屏数据
+# MainViewModel 构造与 StateFlow 初始化在首帧之前就跑完了。
+HSPLcn/edu/qau/timetable/ui/MainViewModel;-><init>(Lcn/edu/qau/timetable/data/repo/TimetableRepository;Lcn/edu/qau/timetable/notify/ReminderScheduler;Lcn/edu/qau/timetable/notify/SilenceScheduler;Lcn/edu/qau/timetable/data/repo/KaoyanRepository;)V
+
+# Room 建库 + 首次查询（首屏课表就是它读出来的）
+HSPLcn/edu/qau/timetable/data/db/AppDatabase_Impl;->createAllTables(Landroidx/sqlite/db/SupportSQLiteDatabase;)V
+HSPLcn/edu/qau/timetable/data/db/AppDatabase_Impl;->termDao()Lcn/edu/qau/timetable/data/db/TermDao;
+HSPLcn/edu/qau/timetable/data/db/AppDatabase_Impl;->courseDao()Lcn/edu/qau/timetable/data/db/CourseDao;
+
+# ---------------------------------------------------------------- 作息时间
+# 课表每一行都要查作息，是首屏渲染里调用最频繁的自有工具类。
+# 这类工具类内部全是小方法，整类标记比逐个列方法更省事也更快。
+Lcn/edu/qau/timetable/core/PeriodTimes;
+Lcn/edu/qau/timetable/core/Term;
+Lcn/edu/qau/timetable/core/WeekPattern;
+Lcn/edu/qau/timetable/core/WeekPatternParser;

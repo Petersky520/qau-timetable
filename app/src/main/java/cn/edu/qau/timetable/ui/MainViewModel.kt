@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -48,6 +49,24 @@ class MainViewModel(
     val settings: StateFlow<AppSettings> =
         repo.settingsFlow.stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
 
+    /**
+     * 课表数据是否**已经从数据库读出来过**。
+     *
+     * ## 为什么需要这个标记（v3.6 首屏优化）
+     *
+     * [activeTerm] 和 [courses] 的初始值分别是 `null` 和 `emptyList()`，
+     * 而「数据库里真的没有学期 / 真的没有课」对外表现**完全一样**。
+     * 于是 App 一启动、Room 还没读完的那个瞬间，界面就会弹出
+     * 「还没有课表数据，点右上角同步」—— 用户明明有课表，却先被告知没有。
+     *
+     * 这个标记把「还没读到」和「读到了但没有」区分开：
+     * 前者显示骨架屏，后者才显示空状态引导。
+     */
+    private val _timetableLoaded = MutableStateFlow(false)
+
+    /** 首屏据此决定：骨架屏 / 课表 / 空状态。 */
+    val timetableLoaded: StateFlow<Boolean> = _timetableLoaded.asStateFlow()
+
     val activeTerm: StateFlow<TermEntity?> =
         repo.observeActiveTerm().stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -56,6 +75,10 @@ class MainViewModel(
             .flatMapLatest { t ->
                 if (t == null) flowOf(emptyList()) else repo.observeCourses(t.id)
             }
+            // 数据库第一次吐出结果时翻标记。放在 flatMapLatest 之后，
+            // 保证「标记翻上去」时列表已经是真实数据，不会出现
+            // loaded=true 但内容还是初始空值的中间帧。
+            .onEach { _timetableLoaded.value = true }
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val exams: StateFlow<List<ExamEntity>> =

@@ -12,11 +12,13 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,6 +26,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
@@ -41,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -93,6 +97,9 @@ fun TimetableScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     val term by vm.activeTerm.collectAsState()
     val weekOverride by vm.weekOverride.collectAsState()
     val settings by vm.settings.collectAsState()
+    // 数据库是否已经吐出第一批数据。首屏三态（骨架 / 课表 / 空）靠它区分，
+    // 否则「还没读完」会被当成「真的没课表」（见 MainViewModel.timetableLoaded）。
+    val loaded by vm.timetableLoaded.collectAsState()
 
     // 0 = 按日期算不出第几周（没填第 1 周周一，或日期落在学期之外）
     val realCurrent = vm.currentWeek()
@@ -133,7 +140,13 @@ fun TimetableScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
             onToday = { vm.setWeek(0) },
         )
 
-        if (term == null || courses.isEmpty()) {
+        // 三态：还没读到 → 骨架屏；读到了但没有 → 空状态引导；有数据 → 课表。
+        //
+        // 之前只有「有/没有」两态，于是冷启动的那几十毫秒里会先闪一下
+        // 「还没有课表数据」，对明明有课表的用户来说像是数据丢了。
+        if (!loaded) {
+            TimetableSkeleton()
+        } else if (term == null || courses.isEmpty()) {
             EmptyTimetable()
         } else {
             // 左右滑动换周。
@@ -241,6 +254,78 @@ private fun WeekBar(
             TextButton(onClick = onToday) { Text("本周") }
         }
     }
+}
+
+/**
+ * 首屏骨架屏。
+ *
+ * ## 为什么需要它（v3.6）
+ *
+ * 冷启动时 Room 读数据库要几十毫秒。在这之前 `courses` 是空的，
+ * 界面会先画一帧「还没有课表数据，点右上角同步」—— 对明明有课表的用户，
+ * 这一闪而过的空状态很像数据丢了。
+ *
+ * ## 为什么画成课表网格的样子
+ *
+ * 骨架屏的价值在于**让用户预期到内容长什么样**。画一个居中的转圈，
+ * 用户只知道"在等"；画出七列 × 若干行的格子，他一眼就知道
+ * "课表马上出来"，而且内容出现时位置不会跳。
+ *
+ * 用 7 列（周一到周日）× 6 行（大致一个上午到下午的节次量）模拟真实网格，
+ * 但**不画星期文字和节次时间** —— 假数据印上去反而让人以为是真内容。
+ */
+@Composable
+private fun TimetableSkeleton() {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        // 表头那一行的模拟（周一~周日）
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // 左侧节次列留窄一点，和真实网格的比例对齐
+            SkeletonBlock(Modifier.width(34.dp).height(18.dp))
+            repeat(7) {
+                SkeletonBlock(Modifier.weight(1f).height(18.dp))
+            }
+        }
+        // 六个网格行，宽度随机错开，看起来更像真实课表而不是整齐的表格
+        val widths = listOf(
+            listOf(0.0f, 1f, 1f, 0f, 1f, 0f, 0f),
+            listOf(1f, 1f, 0f, 1f, 0f, 0f, 0f),
+            listOf(0f, 0f, 1f, 0f, 0f, 1f, 0f),
+            listOf(1f, 0f, 1f, 0f, 1f, 0f, 0f),
+            listOf(0f, 1f, 0f, 0f, 0f, 0f, 1f),
+            listOf(0f, 0f, 0f, 1f, 0f, 0f, 0f),
+        )
+        widths.forEach { row ->
+            Row(
+                Modifier.fillMaxWidth().height(56.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                SkeletonBlock(Modifier.width(34.dp).fillMaxHeight())
+                row.forEach { filled ->
+                    if (filled > 0f) {
+                        SkeletonBlock(Modifier.weight(1f).fillMaxHeight())
+                    } else {
+                        // 空位留白，但用透明占位保证列宽一致
+                        Box(Modifier.weight(1f).fillMaxHeight())
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 骨架屏里的一个灰块。颜色取 surfaceVariant，在明暗两套主题下都有对比度。 */
+@Composable
+private fun SkeletonBlock(modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)),
+    )
 }
 
 @Composable
