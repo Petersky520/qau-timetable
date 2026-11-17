@@ -68,9 +68,11 @@ class BuildContractTest {
         assertTrue("MainViewModel 应暴露 timetableLoaded", vm.contains("timetableLoaded"))
         assertTrue("TimetableScreen 应读取 loaded 状态", screen.contains("vm.timetableLoaded"))
         assertTrue("应有骨架屏分支", screen.contains("TimetableSkeleton"))
+        val loadingBranch = screen.indexOf("if (!loaded)")
+        val emptyBranch = screen.indexOf("EmptyTimetable(onSync)")
         assertTrue(
-            "骨架屏判断必须在空状态之前（否则空状态仍会先闪）",
-            screen.indexOf("if (!loaded)") < screen.indexOf("EmptyTimetable()"),
+            "骨架屏判断必须存在且在空状态之前（否则空状态仍会先闪）",
+            loadingBranch >= 0 && emptyBranch > loadingBranch,
         )
     }
 

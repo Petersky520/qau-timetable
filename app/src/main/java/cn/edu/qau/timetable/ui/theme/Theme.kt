@@ -18,22 +18,13 @@ import androidx.compose.ui.unit.sp
 import cn.edu.qau.timetable.core.UiStyle
 import android.os.Build
 
-// ---------------------------------------------------------------------------
-// Material 3 Expressive
-//
-// Expressive 的视觉特征：更鲜艳的色调、扩到 8 档的圆角刻度、
-// 更粗更醒目的字重、按 surfaceContainer 分层的色调表面。
-//
-// 说明：Expressive 的**装饰性形状**（MaterialShapes / Cookie / Clover）和
-// ButtonGroup / FloatingToolbar / LoadingIndicator 等新组件
-// 并不在 material3 1.4.0 里（属 1.5.0-alpha），
-// 因此这里落地的是 1.4.0 真正提供的部分：完整形状刻度 + 色调 + 字体。
-// ---------------------------------------------------------------------------
+// Expressive hierarchy on stable Material 3: tonal surfaces, generous shapes,
+// emphasized type and the shared spring motion system. All roles remain dynamic-color aware.
 
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF2F6B3C),
+    primary = Color(0xFF285C37),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFB4F2B0),
+    primaryContainer = Color(0xFFC4F1B2),
     onPrimaryContainer = Color(0xFF00210A),
 
     secondary = Color(0xFF52634F),
@@ -41,10 +32,10 @@ private val LightColors = lightColorScheme(
     secondaryContainer = Color(0xFFD5E8CF),
     onSecondaryContainer = Color(0xFF101F0F),
 
-    tertiary = Color(0xFF3A6470),
+    tertiary = Color(0xFF6C5580),
     onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFFBEE9F8),
-    onTertiaryContainer = Color(0xFF001F27),
+    tertiaryContainer = Color(0xFFF0DBFF),
+    onTertiaryContainer = Color(0xFF271435),
 
     error = Color(0xFFBA1A1A),
     onError = Color(0xFFFFFFFF),
@@ -76,17 +67,17 @@ private val DarkColors = darkColorScheme(
     primary = Color(0xFF99D597),
     onPrimary = Color(0xFF003914),
     primaryContainer = Color(0xFF145226),
-    onPrimaryContainer = Color(0xFFB4F2B0),
+    onPrimaryContainer = Color(0xFFC4F1B2),
 
     secondary = Color(0xFFB9CCB4),
     onSecondary = Color(0xFF243423),
     secondaryContainer = Color(0xFF3A4B38),
     onSecondaryContainer = Color(0xFFD5E8CF),
 
-    tertiary = Color(0xFFA2CDDC),
-    onTertiary = Color(0xFF023541),
-    tertiaryContainer = Color(0xFF214C58),
-    onTertiaryContainer = Color(0xFFBEE9F8),
+    tertiary = Color(0xFFD7BDEB),
+    onTertiary = Color(0xFF3C294B),
+    tertiaryContainer = Color(0xFF543F65),
+    onTertiaryContainer = Color(0xFFF0DBFF),
 
     background = Color(0xFF11140F),
     onBackground = Color(0xFFE1E4DB),
@@ -106,7 +97,7 @@ private val DarkColors = darkColorScheme(
     outlineVariant = Color(0xFF424940),
     inverseSurface = Color(0xFFE1E4DB),
     inverseOnSurface = Color(0xFF2E322C),
-    inversePrimary = Color(0xFF2F6B3C),
+    inversePrimary = Color(0xFF285C37),
 )
 
 /**
@@ -123,14 +114,16 @@ private val DarkColors = darkColorScheme(
 private val ExpressiveShapes = Shapes(
     extraSmall = RoundedCornerShape(4.dp),
     small = RoundedCornerShape(8.dp),
-    medium = RoundedCornerShape(12.dp),
-    large = RoundedCornerShape(20.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(24.dp),
     extraLarge = RoundedCornerShape(32.dp),
 )
 
 /** Expressive 的字体更粗、更醒目。 */
 private val ExpressiveTypography: Typography = Typography().let { base ->
     base.copy(
+        displaySmall = base.displaySmall.copy(fontWeight = FontWeight.Bold),
+        headlineMedium = base.headlineMedium.copy(fontWeight = FontWeight.Bold),
         headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.Bold),
         titleLarge = base.titleLarge.copy(fontWeight = FontWeight.SemiBold),
         titleMedium = base.titleMedium.copy(fontWeight = FontWeight.SemiBold),

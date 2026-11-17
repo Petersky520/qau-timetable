@@ -33,8 +33,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // 版本号由 flavor 各自决定，这里只是兜底
-        versionCode = 17
-        versionName = "3.4.1"
+        versionCode = 18
+        versionName = "3.4.2"
         resourceConfigurations += listOf("zh", "en")
     }
 
@@ -55,8 +55,8 @@ android {
         create("full") {
             dimension = "edition"
             applicationId = "cn.edu.qau.timetable"
-            versionCode = 17
-            versionName = "3.4.1"
+            versionCode = 18
+            versionName = "3.4.2"
             buildConfigField("boolean", "IS_LITE", "false")
         }
 
@@ -64,8 +64,8 @@ android {
             dimension = "edition"
             // 独立包名：与完整版互不覆盖，可以同时装
             applicationId = "cn.edu.qau.timetable.lite"
-            versionCode = 1
-            versionName = "1.0.0"
+            versionCode = 2
+            versionName = "3.4.2"
             buildConfigField("boolean", "IS_LITE", "true")
             // 桌面上显示的名字与完整版区分开（写在各 flavor 的 strings.xml 里）
         }

@@ -3,7 +3,6 @@ package cn.edu.qau.timetable.ui
 import android.annotation.SuppressLint
 import android.os.Handler
 import android.os.Looper
-import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -24,7 +23,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -34,13 +32,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import cn.edu.qau.timetable.BuildConfig
 import cn.edu.qau.timetable.data.qz.QzEndpoints
 import cn.edu.qau.timetable.data.qz.QzJs
 import cn.edu.qau.timetable.data.qz.QzJson
@@ -76,33 +75,16 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     val clipboard = LocalClipboardManager.current
 
     var target by remember { mutableStateOf(QzEndpoints.Target.TIMETABLE) }
-    var status by remember { mutableStateOf("① 在下面填学号 / 密码 / 动态码（不经过网页的输入法）\n② 点「填入网页」，再到网页里点「登录」") }
+    var status by remember { mutableStateOf("请在教务网页中选择账号登录，登录后展开下方工具抓取。") }
+    val context = LocalContext.current
+    val inputCompat = remember(context) {
+        context.assets.open("web/login-input-compat.js").bufferedReader().use { it.readText() }
+    }
     var diagnostics by remember { mutableStateOf("") }
     var pageHtml by remember { mutableStateOf("") }
     var pendingKind by remember { mutableStateOf<String?>(null) }
     var lastRows by remember { mutableStateOf<List<List<String>>>(emptyList()) }
     var lastSpans by remember { mutableStateOf<List<List<Int>>>(emptyList()) }
-
-    // ------------------------------------------------------------------
-    // 登录信息走 App 的原生输入框，再用 JS 注入网页。
-    //
-    // 这不是"保底方案"，而是目前**唯一可用的**登录路径：
-    // 2026-10 在小米 15 Pro（Android 17 / 系统 WebView 153）上实测，
-    // 直接在网页输入框里用输入法打字，字符会被插到位置 0，整串倒过来
-    // （输入 1 2 3，输入框里得到 321）。
-    //
-    // 已用设备实测排除的原因：网页 JS（打字时它不碰输入框）、
-    // RTL 方向（各方向都是 ltr）、unicode-bidi: plaintext 注入、
-    // 输入法品牌（搜狗与小米输入法表现一致）、动效转场的变换。
-    // 机制是 WebView 在输入法提交字符后不回传光标位置，
-    // 属系统 WebView 缺陷，App 侧无法修复 —— 所以只能绕开输入法。
-    // ------------------------------------------------------------------
-    var fillU by remember { mutableStateOf("") }
-    var fillP by remember { mutableStateOf("") }
-    var fillC by remember { mutableStateOf("") }
-
-    // 填入成功后自动收起登录卡片，把竖向空间让给网页去点「登录」
-    var loginCollapsed by remember { mutableStateOf(false) }
 
     // 抓取工具登录之后才用得到，默认收起，把竖向空间让给网页
     var toolsExpanded by remember { mutableStateOf(false) }
@@ -154,9 +136,18 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         }
     }
 
+    fun installInputCompat(wv: WebView) {
+        if (webHolder.destroyed) return
+        val host = android.net.Uri.parse(wv.url ?: "").host.orEmpty().lowercase()
+        if (host == "qau.edu.cn" || host.endsWith(".qau.edu.cn")) {
+            wv.evaluateJavascript(inputCompat, null)
+        }
+    }
+
     fun onPageReady(wv: WebView) {
         try {
             if (webHolder.destroyed) return
+            installInputCompat(wv)
             wv.evaluateJavascript(QzJs.EXTRACT_FN, null)
             wv.evaluateJavascript(QzJs.FIND_LINKS_FN, null)
             val kind = pendingKind
@@ -214,31 +205,6 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                         status = "请长按下面的 HTML 复制后发给开发者"
                     }
 
-                    "fill" -> {
-                        // 网页里有没有账号登录的输入框？没有的话多半是还停在「扫码登录」，
-                        // 这时候"填成功"是假的 —— 必须把这件事说出来，不能骗用户。
-                        val found = obj.optBoolean("foundUn") || obj.optBoolean("foundPd") ||
-                            obj.optBoolean("foundCode")
-                        if (!found) {
-                            status = "⚠️ 网页里没找到登录输入框"
-                            diagnostics = "网页停在「扫码登录」时没有账号输入框。\n" +
-                                "切到「账号登录」再点一次「填入网页」。"
-                        } else {
-                            val gotUn = if (obj.isNull("un")) "(没找到)" else obj.optString("un")
-                            val gotCode = if (obj.isNull("code")) "(没找到)" else obj.optString("code")
-                            val matched = gotUn == fillU && gotCode == fillC
-                            status = if (matched) {
-                                "✅ 已填入，请点网页上的「登录」"
-                            } else {
-                                "⚠️ 已填入，但回读的值和输入不一致"
-                            }
-                            diagnostics = "#un=$gotUn  #code=$gotCode  " +
-                                "#pd 长度=${obj.optInt("lenPd", -1)}"
-                            // 填好了就把卡片收起来，把竖向空间让给网页去点「登录」
-                            if (matched) loginCollapsed = true
-                        }
-                    }
-
                     else -> {
                         val payload = QzJson.parse(raw)
                         if (!payload.ok) {
@@ -289,134 +255,20 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         safeEval(QzJs.PAGE_HTML_FN, "导出 HTML")
     }
 
-    /**
-     * 把原生输入框的三个值写进网页的 #un / #pd / #code。
-     *
-     * 这条路径**完全不经过 WebView 的输入法**，所以如果"输入倒序"是
-     * WebView/输入法的锅，这里一定是正常的。
-     * 页面在提交时是读 $("#un").val() / $("#pd").val()，
-     * 所以直接赋值 + 派发 input/change 事件就够了。
-     */
-    fun fillNative() {
-        if (fillU.isBlank() && fillP.isBlank() && fillC.isBlank()) {
-            status = "先在下面把学号/密码/动态码填好"
-            return
-        }
-        val js = buildString {
-            append("(function(){try{")
-            append("function el(id){return document.getElementById(id);}")
-            append("function val(id){var e=el(id);return e?String(e.value):null;}")
-            append("function set(id,v){if(!v)return;var e=el(id);if(!e)return;")
-            append("e.focus();e.value=v;")
-            append("e.dispatchEvent(new Event('input',{bubbles:true}));")
-            append("e.dispatchEvent(new Event('change',{bubbles:true}));}")
-            append("function fill(){")
-            append("set('un',").append(JSONObject.quote(fillU)).append(");")
-            append("set('pd',").append(JSONObject.quote(fillP)).append(");")
-            append("set('code',").append(JSONObject.quote(fillC)).append(");}")
-            append("function report(){var e=el('pd');")
-            append("QauBridge.post(JSON.stringify({ok:true,kind:'fill',")
-            append("foundUn:!!el('un'),foundPd:!!e,foundCode:!!el('code'),")
-            append("un:val('un'),code:val('code'),lenPd:e?String(e.value).length:-1}));}")
-            // 有的部署默认停在「扫码登录」，账号登录的输入框此时还不存在。
-            // 先点一下那个标签再填，用户就不用自己去网页里切。
-            append("function clickAccountTab(){")
-            append("var all=document.querySelectorAll('a,li,span,div,button');")
-            append("for(var i=0;i<all.length;i++){")
-            append("var t=(all[i].textContent||'').replace(/\\s/g,'');")
-            append("if(t==='账号登录'||t==='密码登录'||t==='账号密码登录'){all[i].click();return true;}}")
-            append("return false;}")
-            append("if(el('un')||el('pd')||el('code')){fill();report();}")
-            append("else if(clickAccountTab()){setTimeout(function(){fill();report();},400);}")
-            append("else{report();}")
-            append("}catch(e){QauBridge.post(JSON.stringify({ok:false,error:String(e)}));}})();")
-        }
-        status = "正在填入网页…"
-        safeEval(js, "填入")
-    }
-
     Column(modifier.fillMaxSize()) {
-        // ------------------------------------------------ ① 登录（主路径）
-        Card(Modifier.fillMaxWidth().padding(10.dp)) {
-            Column(
-                Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        status,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (loginCollapsed) {
-                        TextButton(onClick = { loginCollapsed = false }) { Text("修改") }
-                    }
-                }
-
-                if (loginCollapsed) {
-                    // 收起状态：只留一行摘要，其余全让给网页
-                    Text(
-                        listOf(
-                            "学号 ${fillU}",
-                            "密码 ${fillP.length} 位",
-                            "动态码 ${fillC}",
-                        ).joinToString("  ·  "),
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                } else {
-                    OutlinedTextField(
-                        value = fillU, onValueChange = { fillU = it },
-                        label = { Text("学号 / 教工号") }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = fillP, onValueChange = { fillP = it },
-                        label = { Text("密码") }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = fillC, onValueChange = { fillC = it },
-                        label = { Text("动态码 / 验证码") }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { fillNative() }, modifier = Modifier.weight(1f)) {
-                            Text("填入网页")
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                fillU = ""; fillP = ""; fillC = ""
-                                loginCollapsed = false
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) { Text("清空") }
-                    }
-                    if (diagnostics.isNotEmpty()) {
-                        SelectionContainer {
-                            Text(
-                                diagnostics,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
         AndroidView(
             modifier = Modifier.fillMaxWidth().weight(1f),
             factory = { ctx ->
+                if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true)
                 WebView(ctx).apply {
+                    isFocusable = true
+                    isFocusableInTouchMode = true
                     // ---- viewport：与浏览器对齐 ----
                     //
                     // 页面的 viewport meta 是 width=device-width, initial-scale=1。
                     // 不设 useWideViewPort 时 WebView 会忽略这个 meta，按 980px 宽
                     // 布局后再整体缩放塞进控件宽度。设上是为了让布局与浏览器一致。
                     //
-                    // 注：早期曾把"输入倒序"归因到这里，2026-10 在设备上实测证实
-                    // **不是** —— 关掉 LTR 注入、关掉全部动画、换成另一个输入法，
-                    // 倒序依旧。真正原因见文件上方关于登录方式的说明。
                     settings.useWideViewPort = true
                     settings.loadWithOverviewMode = true
 
@@ -429,6 +281,11 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
 
                     addJavascriptInterface(QauBridge { json -> deliver(json) }, "QauBridge")
                     webViewClient = object : WebViewClient() {
+                        override fun onPageCommitVisible(view: WebView, url: String) {
+                            // Install as soon as the login document is visible, even if images are still loading.
+                            installInputCompat(view)
+                        }
+
                         override fun onPageFinished(view: WebView, url: String) {
                             // 延后一拍：onPageFinished 有时会在 layout 阶段回调，
                             // 此时直接写 Compose 状态不安全。
@@ -456,6 +313,10 @@ fun SyncScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                 ) { Text(if (toolsExpanded) "收起抓取工具" else "抓取工具（登录后展开）") }
 
                 if (toolsExpanded) {
+                    Text(status, style = MaterialTheme.typography.bodySmall)
+                    if (diagnostics.isNotEmpty()) {
+                        SelectionContainer { Text(diagnostics, style = MaterialTheme.typography.labelSmall) }
+                    }
                     Text("抓取目标", style = MaterialTheme.typography.labelSmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         QzEndpoints.Target.entries.forEach { t ->

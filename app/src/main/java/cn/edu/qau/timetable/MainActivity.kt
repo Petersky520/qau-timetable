@@ -24,6 +24,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
@@ -56,6 +57,8 @@ import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -444,7 +447,7 @@ private fun AppRoot(vm: MainViewModel, onBarHeightChange: (Dp) -> Unit) {
     val title = when (overlay) {
         Overlay.SETTINGS -> "设置"
         Overlay.SYNC -> "同步课表"
-        Overlay.NONE -> "${tab.label} · 青小农"
+        Overlay.NONE -> tab.label
     }
 
     Scaffold(
@@ -452,7 +455,7 @@ private fun AppRoot(vm: MainViewModel, onBarHeightChange: (Dp) -> Unit) {
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    containerColor = MaterialTheme.colorScheme.surface,
                     titleContentColor = MaterialTheme.colorScheme.onSurface,
                     navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -486,10 +489,19 @@ private fun AppRoot(vm: MainViewModel, onBarHeightChange: (Dp) -> Unit) {
                                 )
                         },
                         label = "title",
-                    ) { t -> Text(t) }
+                    ) { t ->
+                        Column {
+                            Text(
+                                if (overlay == Overlay.NONE) "青小农 · 校园日常" else "青小农",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(t, style = MaterialTheme.typography.headlineSmall)
+                        }
+                    }
                 },
                 actions = {
-                    IconButton(onClick = {
+                    FilledTonalIconButton(onClick = {
                         overlay = Overlay.SYNC
                     }) {
                         Icon(Icons.Filled.CloudSync, contentDescription = "同步")
@@ -609,6 +621,7 @@ private fun AppRoot(vm: MainViewModel, onBarHeightChange: (Dp) -> Unit) {
                             // 考研页里「去设置」要真的能跳过去：设置是 AppRoot 的覆盖层，
                             // 只有这里能把 overlay 切过去。
                             onOpenSettings = { overlay = Overlay.SETTINGS },
+                            onOpenSync = { overlay = Overlay.SYNC },
                             slideSpec = slideSpec,
                             slideFastSpec = slideFastSpec,
                             fadeSpec = fadeSpec,
@@ -662,7 +675,7 @@ private fun AppRoot(vm: MainViewModel, onBarHeightChange: (Dp) -> Unit) {
                         // surfaceVariant 在 M3 是暖灰、在 MIUI X 是浅灰，两套都有对比度。
                         // 浓淡由 GlassPanel 按效果决定，这里只给色相。
                         tint = MaterialTheme.colorScheme.surfaceVariant,
-                        shape = if (floating) RoundedCornerShape(28.dp) else RectangleShape,
+                        shape = if (floating) RoundedCornerShape(32.dp) else RectangleShape,
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(
@@ -724,7 +737,7 @@ private fun RowScope.NavBarItems(
             icon = {
                 val iconScale by animateFloatAsState(
                     targetValue = if (selected) QauMotion.SELECTED_ICON_SCALE else 1f,
-                    animationSpec = QauMotion.ScaleSpringy,
+                    animationSpec = motionOf(QauMotion.ScaleSpringy),
                     label = "navIconScale",
                 )
                 Icon(
@@ -736,8 +749,15 @@ private fun RowScope.NavBarItems(
                     },
                 )
             },
-            label = { Text(t.label) },
+            label = { Text(t.label, style = MaterialTheme.typography.labelMedium) },
             alwaysShowLabel = true,
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                selectedTextColor = MaterialTheme.colorScheme.primary,
+                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
         )
     }
 }
@@ -749,6 +769,7 @@ private fun TabHost(
     vm: MainViewModel,
     onTabChange: (Tab) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenSync: () -> Unit,
     slideSpec: FiniteAnimationSpec<IntOffset>,
     slideFastSpec: FiniteAnimationSpec<IntOffset>,
     fadeSpec: FiniteAnimationSpec<Float>,
@@ -760,10 +781,10 @@ private fun TabHost(
         label = "tab",
     ) { t ->
         when (t) {
-            Tab.TIMETABLE -> TimetableScreen(vm, Modifier.fillMaxSize())
-            Tab.TODAY -> TodayScreen(vm, Modifier.fillMaxSize())
-            Tab.EXAMS -> ExamsScreen(vm, Modifier.fillMaxSize())
-            Tab.GRADES -> GradesScreen(vm, Modifier.fillMaxSize())
+            Tab.TIMETABLE -> TimetableScreen(vm, Modifier.fillMaxSize(), onSync = onOpenSync)
+            Tab.TODAY -> TodayScreen(vm, Modifier.fillMaxSize(), onSync = onOpenSync)
+            Tab.EXAMS -> ExamsScreen(vm, Modifier.fillMaxSize(), onSync = onOpenSync)
+            Tab.GRADES -> GradesScreen(vm, Modifier.fillMaxSize(), onSync = onOpenSync)
             // 走接缝而不是直接引用 KaoyanScreen：Lite 变体里这个调用点
             // 指向的是 flavor 的 KaoyanHost 实现，考研整条依赖链因此不可达，
             // 会被 R8 裁掉（见 app/src/{full,lite}/.../KaoyanHost.kt）。

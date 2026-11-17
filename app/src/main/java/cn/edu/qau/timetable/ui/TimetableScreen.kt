@@ -29,11 +29,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -92,7 +92,7 @@ private fun AnimatedContentTransitionScope<Int>.weekSwitch(
 }
 
 @Composable
-fun TimetableScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
+fun TimetableScreen(vm: MainViewModel, modifier: Modifier = Modifier, onSync: (() -> Unit)? = null) {
     val courses by vm.courses.collectAsState()
     val term by vm.activeTerm.collectAsState()
     val weekOverride by vm.weekOverride.collectAsState()
@@ -147,7 +147,7 @@ fun TimetableScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
         if (!loaded) {
             TimetableSkeleton()
         } else if (term == null || courses.isEmpty()) {
-            EmptyTimetable()
+            EmptyTimetable(onSync)
         } else {
             // 左右滑动换周。
             //
@@ -216,42 +216,43 @@ private fun WeekBar(
         else -> campus.label
     }
 
-    Surface(tonalElevation = 2.dp) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+    ) {
+        // Keep navigation in one compact row; allow text to grow with system font size.
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            IconButton(onClick = onPrev) {
-                Icon(Icons.Filled.ChevronLeft, contentDescription = "上一周")
-            }
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                // 周数字整块上滚：与顶部标题同一套处理（整高位移 + 进出同速），
-                // 半高位移在 AnimatedContent 的裁剪下会让新旧数字叠在一起。
+            Column(Modifier.weight(1f)) {
                 AnimatedContent(
                     targetState = weekText,
                     transitionSpec = {
-                        (slideInVertically(slideSpec) { h -> h } + fadeIn(fadeSpec))
-                            .togetherWith(
-                                slideOutVertically(slideSpec) { h -> -h } +
-                                    fadeOut(fadeSpec)
-                            )
+                        (slideInVertically(slideSpec) { it } + fadeIn(fadeSpec))
+                            .togetherWith(slideOutVertically(slideSpec) { -it } + fadeOut(fadeSpec))
                     },
                     label = "weekText",
-                ) { text ->
-                    Text(text = text, style = MaterialTheme.typography.titleMedium)
+                ) {
+                    Text(
+                        it,
+                        style = if (hasTerm) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                )
+                Text(subtitle, style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            IconButton(onClick = onNext) {
+            FilledTonalIconButton(onClick = onPrev, enabled = hasTerm) {
+                Icon(Icons.Filled.ChevronLeft, contentDescription = "上一周")
+            }
+            FilledTonalIconButton(onClick = onNext, enabled = hasTerm) {
                 Icon(Icons.Filled.ChevronRight, contentDescription = "下一周")
             }
-            TextButton(onClick = onToday) { Text("本周") }
+            TextButton(onClick = onToday, enabled = hasTerm) { Text("本周") }
         }
     }
 }
@@ -329,25 +330,13 @@ private fun SkeletonBlock(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun EmptyTimetable() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Card(modifier = Modifier.padding(24.dp).staggeredAppear(0)) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text("还没有课表数据", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "点右上角的「同步」按钮，在 App 内登录青农大教务系统，" +
-                        "登录成功后会自动抓取本学期课表。\n\n" +
-                        "整个过程 App 不会保存你的密码。",
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
-    }
+private fun EmptyTimetable(onSync: (() -> Unit)?) {
+    ExpressiveEmptyState(
+        title = "从这一周开始",
+        hint = "同步本学期课表，让每一节课都有安排。\n在教务系统登录后即可导入，App 不保存密码。",
+        icon = Icons.Outlined.DateRange,
+        onSync = onSync,
+    )
 }
 
 @Composable
@@ -431,34 +420,43 @@ private fun TimetableGrid(
             .staggeredAppear(0, key = week)
             .verticalScroll(rememberScrollState())
             // 底部让出悬浮底栏那一段，否则最后一节会被底栏挡住滚不出来
+            .padding(horizontal = 6.dp)
             .padding(bottom = LocalFloatingBarReserve.current),
     ) {
         // 表头。有调休时多一行小字标出「补四 / 休」，否则用户会以为课表画错了。
         Row(
-            Modifier.fillMaxWidth().height(if (hasOverride) 44.dp else 28.dp),
+            Modifier.fillMaxWidth().padding(bottom = 6.dp).height(if (hasOverride) 50.dp else 38.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Spacer(Modifier.width(LABEL_WIDTH))
             for (day in 1..7) {
                 val src = columnSource[day - 1]
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(DAY_LABELS[day - 1], fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                        if (hasOverride) {
-                            val mark = when {
-                                src == null -> "休"
-                                src != day -> "补${DAY_LABELS[src - 1]}"
-                                else -> ""
-                            }
-                            if (mark.isNotEmpty()) {
-                                Text(
-                                    text = mark,
-                                    fontSize = 8.sp,
-                                    lineHeight = 9.sp,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
+                    val isToday = term?.dateOf(week, day) == java.time.LocalDate.now()
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerLow,
+                        contentColor = if (isToday) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
+                    ) {
+                        Column(Modifier.padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(DAY_LABELS[day - 1], fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            if (hasOverride) {
+                                val mark = when {
+                                    src == null -> "休"
+                                    src != day -> "补${DAY_LABELS[src - 1]}"
+                                    else -> ""
+                                }
+                                if (mark.isNotEmpty()) {
+                                    Text(
+                                        text = mark,
+                                        fontSize = 8.sp,
+                                        lineHeight = 9.sp,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        color = if (isToday) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                                    )
+                                }
                             }
                         }
                     }
@@ -544,7 +542,7 @@ private fun TimetableGrid(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(CELL_HEIGHT * span)
-                                    .padding(1.dp),
+                                    .padding(2.dp),
                             )
                             period += span
                         } else if (src != null && covered.contains(src to period)) {
@@ -570,7 +568,7 @@ private fun CourseCell(course: CourseEvent, extra: Int, modifier: Modifier) {
         // 用主题里的 Expressive 形状刻度，而不是写死圆角
         shape = MaterialTheme.shapes.small,
         color = color.copy(alpha = 0.16f),
-        border = BorderStroke(1.dp, color.copy(alpha = 0.55f)),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.22f)),
     ) {
         Column(Modifier.padding(horizontal = 3.dp, vertical = 3.dp)) {
             // 显式指定颜色：Surface 的 contentColor 对自定义色会退化成

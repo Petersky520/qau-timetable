@@ -1,5 +1,14 @@
 package cn.edu.qau.timetable.ui
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Today
+import androidx.compose.material.icons.outlined.EventNote
+import androidx.compose.material.icons.outlined.School
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Surface
+import cn.edu.qau.timetable.ui.theme.courseColorFor
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,24 +48,7 @@ import java.time.LocalDate
 private val WEEKDAY_CN = arrayOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
 @Composable
-private fun EmptyState(title: String, hint: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(
-            modifier = Modifier
-                .padding(32.dp)
-                // 空状态也走同一条入场通道，避免出现"别处都在动、这里硬切"的割裂
-                .staggeredAppear(0),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(hint, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-        }
-    }
-}
-
-@Composable
-fun TodayScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
+fun TodayScreen(vm: MainViewModel, modifier: Modifier = Modifier, onSync: (() -> Unit)? = null) {
     val courses by vm.courses.collectAsState()
     val term by vm.activeTerm.collectAsState()
     val settings by vm.settings.collectAsState()
@@ -105,15 +97,12 @@ fun TodayScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
             else ->
                 "本学期课表已经结束了（共 ${termDomain.totalWeeks} 周）。"
         }
-        EmptyState("不在学期周次内", hint)
+        ExpressiveEmptyState("不在学期周次内", hint, modifier, icon = Icons.Outlined.Today, onSync = if (term == null) onSync else null)
         return
     }
 
     if (dow == null) {
-        EmptyState(
-            "今天放假",
-            "调休安排里把 $today 标成了放假日。",
-        )
+        ExpressiveEmptyState("今天放假", "调休安排里把 $today 标成了放假日。", modifier, icon = Icons.Outlined.Today)
         return
     }
 
@@ -128,26 +117,17 @@ fun TodayScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     val entrance = rememberEntranceWindow(todayList.size)
 
     Column(modifier.fillMaxSize()) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp)
+        ExpressiveIntro(
+            eyebrow = "${today.monthValue} 月 ${today.dayOfMonth} 日 · $dayLabel",
+            title = "今天有 ${todayList.size} 节课",
+            subtitle = "第 $week 周 · ${campus.label}",
+            icon = Icons.Outlined.Today,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)
                 .staggeredAppear(0, animate = entrance),
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Text(
-                    "${today}  ${dayLabel}",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    "第 $week 周 · ${campus.label} · 共 ${todayList.size} 节",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
+        )
 
         if (todayList.isEmpty()) {
-            EmptyState("今天没课 🎉", "好好休息，或者去图书馆卷一下。")
+            ExpressiveEmptyState("今天，留点时间给自己", "没有课程安排，好好休息或去探索校园吧。", icon = Icons.Outlined.Today)
         } else {
             LazyColumn(
                 contentPadding = PaddingValues(
@@ -183,60 +163,72 @@ fun TodayScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
 
 @Composable
 private fun CourseRow(course: CourseEvent, campus: Campus, modifier: Modifier = Modifier) {
-    Card(modifier = modifier.fillMaxWidth()) {
+    val accent = courseColorFor(course.name)
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = if (course.startPeriod == course.endPeriod) {
-                        "${course.startPeriod}"
-                    } else {
-                        "${course.startPeriod}-${course.endPeriod}"
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text("节", style = MaterialTheme.typography.labelSmall)
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = accent.copy(alpha = 0.16f),
+                modifier = Modifier.size(64.dp),
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        if (course.startPeriod == course.endPeriod) "${course.startPeriod}" else "${course.startPeriod}–${course.endPeriod}",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text("节", style = MaterialTheme.typography.labelSmall)
+                }
             }
-            Column(Modifier.weight(1f)) {
-                Text(course.name, style = MaterialTheme.typography.titleSmall)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(course.name, style = MaterialTheme.typography.titleMedium)
                 val time = PeriodTimes.rangeText(campus, course.startPeriod, course.endPeriod)
-                if (time.isNotEmpty()) {
-                    Text(time, style = MaterialTheme.typography.bodySmall)
-                }
+                if (time.isNotEmpty()) Text(time, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 val sub = listOf(course.room, course.teacher).filter { it.isNotEmpty() }.joinToString(" · ")
-                if (sub.isNotEmpty()) {
-                    Text(sub, style = MaterialTheme.typography.bodySmall)
-                }
+                if (sub.isNotEmpty()) Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
 }
 
 @Composable
-fun ExamsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
+fun ExamsScreen(vm: MainViewModel, modifier: Modifier = Modifier, onSync: (() -> Unit)? = null) {
     val exams by vm.exams.collectAsState()
     if (exams.isEmpty()) {
-        EmptyState("还没有考试安排", "在「同步」页登录后抓取一次考试安排。")
+        ExpressiveEmptyState("考试安排，一目了然", "同步教务数据，查看考试时间与考场。", modifier, Icons.Outlined.EventNote, onSync)
         return
     }
     val entrance = rememberEntranceWindow(exams.size)
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp + LocalFloatingBarReserve.current),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        item(key = "exam-summary", contentType = "summary") {
+            ExpressiveIntro("考试日程", "从容应考", "共 ${exams.size} 项考试安排 · 提前确认时间与考场", Icons.Outlined.EventNote)
+        }
         itemsIndexed(
             items = exams,
             // exam.id 是 Room 自增主键，全局唯一：滚动复用时动画状态不会串行。
             key = { _, exam -> "e-${exam.id}" },
             contentType = { _, _ -> "exam" },
         ) { index, exam ->
-            Card(Modifier.fillMaxWidth().staggeredAppear(index, animate = entrance)) {
-                Column(Modifier.padding(14.dp)) {
-                    Text(exam.course, style = MaterialTheme.typography.titleSmall)
+            Card(
+                Modifier.fillMaxWidth().staggeredAppear(index + 1, animate = entrance),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            ) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(exam.course, style = MaterialTheme.typography.titleMedium)
                     val line1 = listOf(exam.date, exam.time).filter { it.isNotEmpty() }.joinToString("  ")
                     if (line1.isNotEmpty()) Text(line1, style = MaterialTheme.typography.bodySmall)
                     val line2 = listOf(exam.room, exam.seat).filter { it.isNotEmpty() }.joinToString(" · ")
@@ -269,10 +261,10 @@ private data class GradeScreenData(
 )
 
 @Composable
-fun GradesScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
+fun GradesScreen(vm: MainViewModel, modifier: Modifier = Modifier, onSync: (() -> Unit)? = null) {
     val grades by vm.grades.collectAsState()
     if (grades.isEmpty()) {
-        EmptyState("还没有成绩数据", "在「同步」页登录后抓取一次成绩。")
+        ExpressiveEmptyState("每一份努力，都有记录", "同步成绩，查看学分、绩点与学期明细。", modifier, Icons.Outlined.School, onSync)
         return
     }
 
@@ -313,16 +305,18 @@ fun GradesScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
                 .fillMaxWidth()
                 .padding(12.dp)
                 .staggeredAppear(0, animate = entrance),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer),
         ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.Bottom) {
                     Column(Modifier.weight(1f)) {
                         Text("平均学分绩点", style = MaterialTheme.typography.labelSmall)
                         Text(
                             if (stats.hasGpa) String.format("%.3f", stats.gpa) else "-",
-                            style = MaterialTheme.typography.headlineSmall,
+                            style = MaterialTheme.typography.displaySmall,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                     }
                     Column(Modifier.weight(1f)) {
@@ -413,8 +407,11 @@ private fun TermHeader(row: GradeRow.Term, index: Int, animate: Boolean) {
 
 @Composable
 private fun GradeCourseCard(g: GradeEntity, index: Int, animate: Boolean) {
-    Card(Modifier.fillMaxWidth().staggeredAppear(index + 1, animate = animate)) {
-        Column(Modifier.padding(12.dp)) {
+    Card(
+        Modifier.fillMaxWidth().staggeredAppear(index + 1, animate = animate),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     g.course,

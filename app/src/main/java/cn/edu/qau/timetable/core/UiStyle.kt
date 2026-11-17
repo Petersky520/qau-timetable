@@ -13,8 +13,8 @@ package cn.edu.qau.timetable.core
 enum class UiStyle(val label: String, val description: String) {
     /** 默认：农大绿 + Material 3 Expressive。 */
     MATERIAL3(
-        label = "Material 3",
-        description = "农大绿配色，可跟随便签取色",
+        label = "Material 3E",
+        description = "灵动圆角与色调卡片，可跟随壁纸取色",
     ),
 
     /** MIUI X / HyperOS 风味。 */

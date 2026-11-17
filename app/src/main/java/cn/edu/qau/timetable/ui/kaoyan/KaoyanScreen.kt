@@ -8,6 +8,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.School
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.MaterialTheme
+import cn.edu.qau.timetable.ui.ExpressiveIntro
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -93,6 +98,10 @@ fun KaoyanScreen(
     }
 
     Column(modifier.fillMaxSize()) {
+        ExpressiveIntro(
+            "考研工具", "向下一站出发", "选校、论文与备考资料，在这里找到方向。",
+            Icons.Outlined.School, Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp),
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -105,6 +114,11 @@ fun KaoyanScreen(
                     selected = tab == t,
                     onClick = { tab = t },
                     label = { Text(t.label) },
+                    shape = MaterialTheme.shapes.extraLarge,
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    ),
                 )
             }
         }

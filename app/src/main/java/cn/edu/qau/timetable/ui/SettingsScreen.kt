@@ -8,12 +8,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -84,20 +87,27 @@ fun SettingsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
+            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        ExpressiveIntro("偏好设置", "按你的习惯来", "从校园作息到界面外观，打造自己的课表。", Icons.Filled.Tune)
+        SectionLabel("校园与外观")
         CampusCard(vm)
         AppearanceCard(vm)
+        SectionLabel("课表与日程")
         TermCard(vm)
         OverridesCard(vm)
+        SectionLabel("提醒与静音")
         ReminderCard(vm)
         SilenceCard(vm)
+        SectionLabel("同步与连接")
         UrlsCard(vm)
         // AI 搜索只服务于考研模块（选校问答）。Lite 版没有考研，
         // 留着这张卡只会让人填了密钥却找不到用处。
         if (KaoyanFeature.hasKaoyan) AiCard(vm)
+        SectionLabel("关于与反馈")
         CrashLogCard()
         AboutCard()
     }
@@ -113,8 +123,11 @@ fun SettingsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
 private fun CampusCard(vm: MainViewModel) {
     val settings by vm.settings.collectAsState()
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("校区", style = MaterialTheme.typography.titleSmall)
             Text(
                 "两个校区的作息时间不同，选错会导致上课提醒时间不对。",
@@ -144,8 +157,11 @@ private fun CampusCard(vm: MainViewModel) {
 private fun AppearanceCard(vm: MainViewModel) {
     val settings by vm.settings.collectAsState()
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("外观", style = MaterialTheme.typography.titleSmall)
 
             Text("界面风格", style = MaterialTheme.typography.bodyMedium)
@@ -279,8 +295,11 @@ private fun TermCard(vm: MainViewModel) {
         mutableStateOf(settings.totalWeeks.toString())
     }
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("学期", style = MaterialTheme.typography.titleSmall)
             Text(
                 "「第 1 周周一」决定周次换算，请按校历填写。留空则按月份粗略估算。",
@@ -334,8 +353,11 @@ private fun OverridesCard(vm: MainViewModel) {
     var newOverrideDate by remember { mutableStateOf("") }
     var newPick by remember { mutableStateOf(-1) }
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("调休安排", style = MaterialTheme.typography.titleSmall)
             Text(
                 "法定节假日调休填在这里。补课日照常有提醒、也会自动静音。",
@@ -441,8 +463,11 @@ private fun ReminderCard(vm: MainViewModel) {
         mutableStateOf(settings.remindMinutesBefore.toString())
     }
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("上课提醒", style = MaterialTheme.typography.titleSmall)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("开启提醒", Modifier.weight(1f))
@@ -534,8 +559,11 @@ private fun SilenceCard(vm: MainViewModel) {
         }
     }
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("上课自动静音", style = MaterialTheme.typography.titleSmall)
             Text(
                 "上课时自动把铃声调低，下课后还原成你原来的设置。" +
@@ -610,8 +638,11 @@ private fun UrlsCard(vm: MainViewModel) {
     var examUrl by remember(settings.examUrl) { mutableStateOf(settings.examUrl) }
     var gradeUrl by remember(settings.gradeUrl) { mutableStateOf(settings.gradeUrl) }
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("教务系统抓取地址", style = MaterialTheme.typography.titleSmall)
             Text(
                 "默认是强智 jsxsd 的常见路径。如果抓不到，可以登录后在浏览器里" +
@@ -659,8 +690,11 @@ private fun AiCard(vm: MainViewModel) {
         mutableStateOf(settings.kaoyanCatalogUrl)
     }
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("AI 搜索（考研）", style = MaterialTheme.typography.titleSmall)
             Text(
                 "「考研 → AI 搜索」用的是你自己填的服务：任何 OpenAI 兼容接口都行" +
@@ -738,8 +772,11 @@ private fun CrashLogCard() {
 
     LaunchedEffect(Unit) { crashLog = CrashLogger.read(context) }
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("上次崩溃日志", style = MaterialTheme.typography.titleSmall)
             val log = crashLog
             if (log.isNullOrBlank()) {
@@ -840,7 +877,10 @@ private fun ScheduleStatusLine(kind: ScheduleStatus.Kind, vm: MainViewModel) {
  */
 @Composable
 private fun AboutCard() {
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("关于", style = MaterialTheme.typography.titleSmall)
             Text(
