@@ -1,75 +1,79 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-  桌面小组件布局（Material 3）。
-
-  结构：
-    标题行 —— 左侧标题，右侧「第 N 周」胶囊徽标
-    正文   —— 今日课程（跨节的课合并显示起止时间）
-
-  M3 要点：
-    · 16dp 内边距（M3 的标准间距刻度）
-    · 分层表面色 surfaceContainerHigh，圆角跟随系统小组件半径
-    · 两级文字色：标题用 onSurface，正文用 onSurfaceVariant
-    · 周次做成 primaryContainer 的徽标，而不是塞进标题字符串
-    · 整块可点（由 Provider 绑定点击），不是只有文字能点
-
-  注意：下面三个 TextView 的 android:text 是**占位文本**，有两个用途 ——
-    1. 作为 initialLayout，添加后到首次 onUpdate 之间不至于是一片空白；
-    2. 作为 widget_timetable_info.xml 的 previewLayout，
-       让系统小组件选择器里能直接看到真实排版（tools:text 编译期就被剥掉了，
-       用它的话预览会是一张空卡片）。
-  Provider 每次 render 都会覆盖这三处文本，运行时不会显示这些占位内容。
--->
+<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_bg"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:padding="10dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:paddingStart="3dp"
+        android:paddingEnd="3dp">
 
-        <TextView
-            android:id="@+id/widget_title"
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textColor="@color/widget_on_surface"
-            android:textSize="15sp"
-            android:textStyle="bold"
-            android:text="青小农 · 周三" />
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="@string/widget_title_today"
+                android:textColor="@color/widget_on_surface"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_subtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="@color/widget_on_surface_variant"
+                android:textSize="12sp" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/widget_badge"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="6dp"
             android:background="@drawable/widget_badge_bg"
-            android:ellipsize="end"
             android:maxLines="1"
-            android:paddingStart="10dp"
-            android:paddingTop="3dp"
-            android:paddingEnd="10dp"
-            android:paddingBottom="3dp"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="4dp"
             android:textColor="@color/widget_on_accent_container"
             android:textSize="11sp"
-            android:text="第 5 周" />
+            android:textStyle="bold"
+            android:visibility="gone" />
     </LinearLayout>
 
     <TextView
-        android:id="@+id/widget_body"
+        android:id="@+id/widget_message"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:lineSpacingExtra="4dp"
+        android:layout_marginStart="3dp"
+        android:layout_marginTop="8dp"
+        android:text="@string/widget_initial_message"
         android:textColor="@color/widget_on_surface_variant"
-        android:textSize="12sp"
-        android:text="1-2节 课程名称&#10;教室  08:00-09:40" />
+        android:textSize="13sp" />
 
+    <LinearLayout
+        android:id="@+id/widget_courses"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp"
+        android:orientation="vertical" />
 </LinearLayout>

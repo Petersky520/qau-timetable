@@ -38,7 +38,6 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import cn.edu.qau.timetable.ui.glass.LocalFloatingBarReserve
 import cn.edu.qau.timetable.ui.motion.rememberEntranceWindow
 import cn.edu.qau.timetable.ui.motion.staggeredAppear
 
@@ -129,7 +128,7 @@ private fun AiApiPane(
             top = 4.dp,
             end = 12.dp,
             // 悬浮底栏会盖住内容，这里必须让出那一段，否则最后一行永远滚不出来
-            bottom = 12.dp + LocalFloatingBarReserve.current,
+            bottom = 12.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

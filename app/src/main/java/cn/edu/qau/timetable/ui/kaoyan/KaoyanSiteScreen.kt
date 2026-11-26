@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import cn.edu.qau.timetable.core.kaoyan.ResearchSite
 import cn.edu.qau.timetable.core.kaoyan.SiteCatalog
 import cn.edu.qau.timetable.core.kaoyan.SiteCategory
-import cn.edu.qau.timetable.ui.glass.LocalFloatingBarReserve
 import cn.edu.qau.timetable.ui.motion.rememberEntranceWindow
 import cn.edu.qau.timetable.ui.motion.staggeredAppear
 
@@ -137,7 +136,7 @@ fun KaoyanSiteScreen(
                 top = 4.dp,
                 end = 12.dp,
                 // 悬浮底栏会盖住内容，这里必须让出那一段，否则最后一条永远滚不出来
-                bottom = 12.dp + LocalFloatingBarReserve.current,
+                bottom = 12.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {

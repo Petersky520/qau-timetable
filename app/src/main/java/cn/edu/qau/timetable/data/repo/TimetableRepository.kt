@@ -5,7 +5,6 @@ import cn.edu.qau.timetable.core.Campus
 import cn.edu.qau.timetable.core.Term
 import cn.edu.qau.timetable.data.db.AppDatabase
 import cn.edu.qau.timetable.data.model.CourseEventEntity
-import cn.edu.qau.timetable.data.model.ExamEntity
 import cn.edu.qau.timetable.data.model.GradeEntity
 import cn.edu.qau.timetable.data.model.TermEntity
 import cn.edu.qau.timetable.data.prefs.AppSettings
@@ -13,7 +12,6 @@ import cn.edu.qau.timetable.data.prefs.SettingsStore
 import cn.edu.qau.timetable.data.qz.QzPayload
 import cn.edu.qau.timetable.data.qz.QzTableParser
 import cn.edu.qau.timetable.domain.CourseEvent
-import cn.edu.qau.timetable.domain.ExamItem
 import cn.edu.qau.timetable.domain.GradeItem
 import cn.edu.qau.timetable.widget.TimetableWidgetProvider
 import kotlinx.coroutines.flow.Flow
@@ -33,7 +31,6 @@ class TimetableRepository(
 
     fun observeTerms(): Flow<List<TermEntity>> = db.termDao().observeAll()
     fun observeActiveTerm(): Flow<TermEntity?> = db.termDao().observeActive()
-    fun observeExams(termId: Long): Flow<List<ExamEntity>> = db.examDao().observeByTerm(termId)
     fun observeGrades(): Flow<List<GradeEntity>> = db.gradeDao().observeAll()
 
     fun observeCourses(termId: Long): Flow<List<CourseEvent>> =
@@ -194,7 +191,6 @@ class TimetableRepository(
         val result = try {
             when (payload.kind) {
                 "kb" -> ingestTimetable(payload, current)
-                "exam" -> ingestExams(payload, current)
                 "grade" -> ingestGrades(payload, current)
                 else -> IngestResult(0, "未知的抓取类型：${payload.kind}")
             }
@@ -212,12 +208,7 @@ class TimetableRepository(
         return result
     }
 
-    /**
-     * 让桌面小组件重画一次。
-     *
-     * 换界面风格时要用：小组件是 RemoteViews、读不到 Compose 主题，
-     * 颜色是渲染时显式套上去的，不重画就一直停在旧风格上。
-     */
+    /** 课表相关偏好变更后刷新桌面小部件。 */
     fun refreshWidget() {
         runCatching { TimetableWidgetProvider.refresh(context) }
     }
@@ -241,7 +232,7 @@ class TimetableRepository(
     private suspend fun ingestTimetable(p: QzPayload, current: AppSettings): IngestResult {
         val events = QzTableParser.parseTimetable(p.rows, p.rowspans)
         if (events.isEmpty()) {
-            return IngestResult(0, "表格里没有解析出任何课程。可以在「同步」页查看抓到的原始表格，确认选对了页面。")
+            return IngestResult(0, "未找到可导入的课程，请确认教务网页已显示本学期课表。")
         }
         val term = ensureTerm(current)
         val entities = events.mapIndexed { idx, e ->
@@ -249,26 +240,6 @@ class TimetableRepository(
         }
         db.courseDao().replaceTerm(term.id, entities)
         return IngestResult(entities.size, "", termId = term.id)
-    }
-
-    private suspend fun ingestExams(p: QzPayload, current: AppSettings): IngestResult {
-        val items: List<ExamItem> = QzTableParser.parseExams(p.rows)
-        if (items.isEmpty()) return IngestResult(0, "没有解析出考试安排")
-        val term = ensureTerm(current)
-        db.examDao().replaceTerm(
-            term.id,
-            items.map {
-                ExamEntity(
-                    termId = term.id,
-                    course = it.course,
-                    date = it.date,
-                    time = it.time,
-                    room = it.room,
-                    seat = it.seat,
-                )
-            }
-        )
-        return IngestResult(items.size, "", termId = term.id)
     }
 
     private suspend fun ingestGrades(p: QzPayload, current: AppSettings): IngestResult {

@@ -1,6 +1,5 @@
 package cn.edu.qau.timetable.data.prefs
 
-import android.app.ActivityManager
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -12,9 +11,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import cn.edu.qau.timetable.core.Campus
 import cn.edu.qau.timetable.core.DayOverride
 import cn.edu.qau.timetable.core.DayOverrides
-import cn.edu.qau.timetable.core.GlassEffect
 import cn.edu.qau.timetable.core.SilenceMode
-import cn.edu.qau.timetable.core.UiStyle
 import cn.edu.qau.timetable.core.kaoyan.AiConfig
 import cn.edu.qau.timetable.data.qz.QzEndpoints
 import kotlinx.coroutines.flow.Flow
@@ -67,40 +64,10 @@ data class AppSettings(
      * `fallbackToDestructiveMigration()`，升版本会把用户的课表成绩清掉。
      */
     val dayOverrides: List<DayOverride> = emptyList(),
-    /** Material You 动态取色（跟随手机壁纸）。只对 Material 3 风格生效。 */
     val dynamicColor: Boolean = true,
-    /** 界面风格：Material 3（默认）或 MIUI X。 */
-    val uiStyle: UiStyle = UiStyle.MATERIAL3,
-    /**
-     * 底栏的玻璃效果：无 / 高斯模糊。
-     *
-     * 对原版底栏和悬浮底栏都生效 —— 选「无」时底栏会回到完全不透明、
-     * 由 Scaffold 正常占位的那副样子。
-     */
-    val glassEffect: GlassEffect = GlassEffect.GAUSSIAN,
-    /**
-     * 悬浮底栏。
-     *
-     * 打开：底栏是一枚浮在内容之上的玻璃胶囊，内容从底下穿过去、被模糊。
-     * 关闭：回到原来那种贴底、占位、不透明的 NavigationBar。
-     *
-     * 留这个开关是因为悬浮底栏依赖 GraphicsLayer 录屏 + 模糊，
-     * 属于"能用但没必要人人都用"的东西 —— 而且有人就是更习惯原版那种踏实感。
-     */
-    val floatingBottomBar: Boolean = true,
-    /**
-     * 性能模式。
-     *
-     * 开启后底栏玻璃效果**一律降级为纯色**：不再把整屏录进 GraphicsLayer、
-     * 不再做实时模糊。这是这个 App 里唯一"每帧都在烧 GPU"的地方，
-     * 低端机上关掉它换来的流畅度远比那层磨砂玻璃值钱。
-     *
-     * 默认值**跟随设备**（[SettingsStore] 用 `ActivityManager.isLowRamDevice` 判定），
-     * 这里的 false 只是 JVM 单测里 `AppSettings()` 的兜底。
-     */
-    val performanceMode: Boolean = false,
+    val timetableWeekGrid: Boolean = false,
+    // 保留旧版已保存的教务地址。同步界面会验证学校域名，并可回退到内置入口。
     val kbUrl: String = QzEndpoints.TIMETABLE,
-    val examUrl: String = QzEndpoints.EXAMS,
     val gradeUrl: String = QzEndpoints.GRADES,
     // 原先还有 classroomUrl（空闲教室页）。该功能已下线，设置项一并移除；
     // DataStore 里残留的 url_classroom 键不再读取，也不影响其它设置。
@@ -124,17 +91,6 @@ data class AppSettings(
     /** 组装成 AI 客户端直接吃的配置。 */
     val aiConfig: AiConfig get() = AiConfig(aiBaseUrl, aiApiKey, aiModel)
 
-    /**
-     * 真正生效的底栏效果。
-     *
-     * 性能模式是**覆盖式**的：它不改用户的 [glassEffect] 选择（设置页那颗 chip 仍然
-     * 显示用户选过的东西），只在渲染路径上把它压平成「无」。
-     * 这样关掉性能模式时，用户原来的偏好原封不动地回来 ——
-     * 如果写回成 NONE，等于替用户改了设置，再打开就丢了他选过的效果。
-     */
-    val effectiveGlassEffect: GlassEffect
-        get() = if (performanceMode) GlassEffect.NONE else glassEffect
-
     val favoriteIds: List<String> get() = kaoyanFavorites.split(',').filter { it.isNotBlank() }
 
     /**
@@ -151,24 +107,6 @@ data class AppSettings(
 
 class SettingsStore(private val context: Context) {
 
-    /**
-     * 性能模式的**出厂默认值**：低内存设备默认开。
-     *
-     * `ActivityManager.isLowRamDevice` 是系统对「这台机器跑不动花哨东西」的官方判断
-     * （厂商在 build.prop 里标 `ro.config.low_ram=true`，或 RAM 小于阈值）。
-     * 拿它当默认值，比按 SDK 版本 / 机型白名单猜要靠谱得多：
-     * 厂商自己最清楚这台机器几斤几两。
-     *
-     * 只算一次并缓存 —— 这个值在进程生命周期内不会变，
-     * 而它在每次 `dataStore.data` 发射时都要用（设置页每改一项都会重发）。
-     */
-    private val defaultPerformanceMode: Boolean by lazy {
-        runCatching {
-            (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager)
-                .isLowRamDevice
-        }.getOrDefault(false)
-    }
-
     val flow: Flow<AppSettings> = context.dataStore.data.map { p ->
         AppSettings(
             campus = Campus.fromName(p[KEY_CAMPUS]),
@@ -182,14 +120,8 @@ class SettingsStore(private val context: Context) {
             silenceMode = SilenceMode.fromName(p[KEY_SILENCE_MODE]),
             dayOverrides = DayOverrides.decode(p[KEY_DAY_OVERRIDES].orEmpty()),
             dynamicColor = p[KEY_DYNAMIC_COLOR] ?: true,
-            uiStyle = UiStyle.fromName(p[KEY_UI_STYLE]),
-            glassEffect = GlassEffect.fromName(p[KEY_GLASS_EFFECT]),
-            floatingBottomBar = p[KEY_FLOATING_BAR] ?: true,
-            // 没存过 = 用户没表过态 → 按设备能力给默认值（低内存机默认开）。
-            // 一旦用户手动拨过开关，就以他拨的为准，不再跟随设备。
-            performanceMode = p[KEY_PERFORMANCE_MODE] ?: defaultPerformanceMode,
+            timetableWeekGrid = p[KEY_TIMETABLE_WEEK_GRID] ?: false,
             kbUrl = p[KEY_KB_URL] ?: QzEndpoints.TIMETABLE,
-            examUrl = p[KEY_EXAM_URL] ?: QzEndpoints.EXAMS,
             gradeUrl = p[KEY_GRADE_URL] ?: QzEndpoints.GRADES,
             aiBaseUrl = p[KEY_AI_BASE_URL] ?: "",
             aiApiKey = p[KEY_AI_API_KEY] ?: "",
@@ -231,38 +163,13 @@ class SettingsStore(private val context: Context) {
         it[KEY_DYNAMIC_COLOR] = enabled
     }
 
-    suspend fun setUiStyle(style: UiStyle) = edit {
-        it[KEY_UI_STYLE] = style.name
-    }
-
-    suspend fun setGlassEffect(effect: GlassEffect) = edit {
-        it[KEY_GLASS_EFFECT] = effect.name
-    }
-
-    suspend fun setFloatingBottomBar(enabled: Boolean) = edit {
-        it[KEY_FLOATING_BAR] = enabled
-    }
-
-    /**
-     * 性能模式开关。
-     *
-     * 写进去的永远是**显式**的值：从这一刻起它就不再跟随设备默认值了。
-     * 想「恢复自动」只能清数据 —— 这里不做三态，因为一个只有两档的开关
-     * 加第三档「自动」会让设置页多一行看不懂的东西，而低内存设备的默认值
-     * 本来就已经是对的。
-     */
-    suspend fun setPerformanceMode(enabled: Boolean) = edit {
-        it[KEY_PERFORMANCE_MODE] = enabled
+    suspend fun setTimetableWeekGrid(enabled: Boolean) = edit {
+        it[KEY_TIMETABLE_WEEK_GRID] = enabled
     }
 
     /** 整份替换调休安排（增删都在 UI 侧算好再写回）。 */
     suspend fun setDayOverrides(list: List<DayOverride>) = edit {
         it[KEY_DAY_OVERRIDES] = DayOverrides.encode(list)
-    }
-    suspend fun setUrls(kb: String, exam: String, grade: String) = edit {
-        it[KEY_KB_URL] = kb
-        it[KEY_EXAM_URL] = exam
-        it[KEY_GRADE_URL] = grade
     }
 
     // ------------------------------------------------------------ 考研模块
@@ -304,12 +211,8 @@ class SettingsStore(private val context: Context) {
         val KEY_SILENCE_MODE = stringPreferencesKey("silence_mode")
         val KEY_DAY_OVERRIDES = stringPreferencesKey("day_overrides")
         val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
-        val KEY_UI_STYLE = stringPreferencesKey("ui_style")
-        val KEY_GLASS_EFFECT = stringPreferencesKey("glass_effect")
-        val KEY_FLOATING_BAR = booleanPreferencesKey("floating_bottom_bar")
-        val KEY_PERFORMANCE_MODE = booleanPreferencesKey("performance_mode")
+        val KEY_TIMETABLE_WEEK_GRID = booleanPreferencesKey("timetable_week_grid")
         val KEY_KB_URL = stringPreferencesKey("url_kb")
-        val KEY_EXAM_URL = stringPreferencesKey("url_exam")
         val KEY_GRADE_URL = stringPreferencesKey("url_grade")
         // KEY_CLASSROOM_URL = stringPreferencesKey("url_classroom") 已随功能下线删除
         val KEY_AI_BASE_URL = stringPreferencesKey("ai_base_url")

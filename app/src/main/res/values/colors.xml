@@ -2,16 +2,7 @@
 <resources>
     <color name="ic_launcher_background">#285C37</color>
 
-    <!--
-      桌面小组件的 Material 3 配色。
-
-      取自 App 内置的农大绿 M3 调色板（见 ui/theme/Theme.kt），
-      深色模式的值由 values-night/colors.xml 覆盖。
-
-      说明：小组件走 RemoteViews，拿不到 Compose 的动态取色（Material You），
-      所以这里用固定色值；系统深浅色切换靠 values-night 生效。
-      命名沿用 M3 的语义色名，方便和 Theme.kt 对照。
-    -->
+    <!-- Default and pre-Android 12 widget palette. -->
     <color name="widget_surface">#E5EAE0</color>             <!-- surfaceContainerHigh -->
     <color name="widget_on_surface">#191D17</color>           <!-- onSurface -->
     <color name="widget_on_surface_variant">#424940</color>   <!-- onSurfaceVariant -->
@@ -19,16 +10,6 @@
     <color name="widget_on_accent_container">#00210A</color>  <!-- onPrimaryContainer -->
     <color name="widget_outline_variant">#C2C9BD</color>      <!-- outlineVariant -->
 
-    <!--
-      MIUI X 风格的小组件配色（设置 → 外观 → 界面风格 选 MIUI X 时启用）。
-
-      资源限定符（-night / -v31 …）没法按 App 内的设置切换，所以这几项由
-      TimetableWidgetProvider 在渲染时**显式套用**：换背景 drawable + setTextColor。
-      这里沿用同一套语义色名，逐项对应 Theme.kt 里的 Miuix* 调色板。
-    -->
-    <color name="widget_surface_miuix">#FFFFFF</color>             <!-- 白卡 -->
-    <color name="widget_on_surface_miuix">#141619</color>          <!-- onSurface -->
-    <color name="widget_on_surface_variant_miuix">#6B7280</color>  <!-- onSurfaceVariant -->
-    <color name="widget_accent_container_miuix">#DCE9FF</color>    <!-- primaryContainer -->
-    <color name="widget_on_accent_container_miuix">#00276B</color> <!-- onPrimaryContainer -->
+    <color name="widget_primary">#285C37</color>
+    <color name="widget_course_surface">#FFFFFF</color>
 </resources>

@@ -14,7 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import cn.edu.qau.timetable.ui.glass.LocalFloatingBarReserve
 
 /** Shared tonal surfaces keep the same hierarchy with wallpaper colors and dark mode. */
 @Composable
@@ -68,10 +67,9 @@ internal fun ExpressiveEmptyState(
     icon: ImageVector = Icons.Outlined.AutoStories,
     onSync: (() -> Unit)? = null,
 ) {
-    // Weighting the whitespace keeps the message above the floating navigation.
     Column(
         modifier = modifier.fillMaxSize().padding(horizontal = 24.dp)
-            .padding(bottom = LocalFloatingBarReserve.current).verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {

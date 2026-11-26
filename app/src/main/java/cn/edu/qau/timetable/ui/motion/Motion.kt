@@ -17,10 +17,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -105,6 +107,8 @@ object QauMotion {
     val Effects: FiniteAnimationSpec<Float> =
         spring(dampingRatio = 1f, stiffness = 1300f)
 
+    val ColorEffects: FiniteAnimationSpec<Color> = spring(dampingRatio = 1f, stiffness = 1300f)
+
     /** 更快的透明度变化，用于退场。 */
     val EffectsFast: FiniteAnimationSpec<Float> =
         spring(dampingRatio = 1f, stiffness = 2400f)
@@ -118,6 +122,8 @@ object QauMotion {
 
     val SlideSpatialFast: FiniteAnimationSpec<IntOffset> =
         spring(dampingRatio = 1f, stiffness = 900f)
+
+    val LayoutFast: FiniteAnimationSpec<IntSize> = spring(dampingRatio = 1f, stiffness = 620f)
 
     // ------------------------------------------------------------------ 尺度
 

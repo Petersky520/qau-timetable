@@ -59,7 +59,6 @@ import cn.edu.qau.timetable.core.kaoyan.MajorCategory
 import cn.edu.qau.timetable.core.kaoyan.MajorSearch
 import cn.edu.qau.timetable.core.kaoyan.Region
 import cn.edu.qau.timetable.core.kaoyan.SchoolTier
-import cn.edu.qau.timetable.ui.glass.LocalFloatingBarReserve
 import cn.edu.qau.timetable.ui.motion.rememberEntranceWindow
 import cn.edu.qau.timetable.ui.motion.staggeredAppear
 
@@ -176,7 +175,7 @@ fun KaoyanSchoolScreen(vm: KaoyanViewModel, modifier: Modifier = Modifier) {
                 top = 8.dp,
                 end = 12.dp,
                 // 悬浮底栏会盖住内容，这里必须让出那一段，否则最后一条永远滚不出来
-                bottom = 12.dp + LocalFloatingBarReserve.current,
+                bottom = 12.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {

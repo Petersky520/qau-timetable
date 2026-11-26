@@ -10,5 +10,5 @@
     <!-- 桌面图标下的名字。加「Lite」是为了和完整版并排放在桌面上时能一眼分清。 -->
     <string name="app_name">青小农Lite</string>
 
-    <string name="widget_description">今日课程一目了然；今天没课时显示最近一次课。（Lite 版）</string>
+    <string name="widget_description">显示课程时间、教室和节次。今天没课时显示下一次上课安排。（Lite 版）</string>
 </resources>

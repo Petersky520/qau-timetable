@@ -5,10 +5,7 @@ import androidx.lifecycle.viewModelScope
 import cn.edu.qau.timetable.core.Campus
 import cn.edu.qau.timetable.core.DayOverride
 import cn.edu.qau.timetable.core.DayOverrides
-import cn.edu.qau.timetable.core.GlassEffect
 import cn.edu.qau.timetable.core.SilenceMode
-import cn.edu.qau.timetable.core.UiStyle
-import cn.edu.qau.timetable.data.model.ExamEntity
 import cn.edu.qau.timetable.data.model.GradeEntity
 import cn.edu.qau.timetable.data.model.TermEntity
 import cn.edu.qau.timetable.data.prefs.AppSettings
@@ -81,13 +78,6 @@ class MainViewModel(
             .onEach { _timetableLoaded.value = true }
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val exams: StateFlow<List<ExamEntity>> =
-        repo.observeActiveTerm()
-            .flatMapLatest { t ->
-                if (t == null) flowOf(emptyList()) else repo.observeExams(t.id)
-            }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
     val grades: StateFlow<List<GradeEntity>> =
         repo.observeGrades().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -130,9 +120,11 @@ class MainViewModel(
     val effectiveWeek: Int
         get() = _weekOverride.value.takeIf { it > 0 } ?: currentWeek().coerceAtLeast(1)
 
-    fun setWeek(week: Int) { _weekOverride.value = week.coerceAtLeast(0) }
+    fun setWeek(week: Int) {
+        _weekOverride.value = week.coerceIn(0, activeTerm.value?.totalWeeks?.coerceAtLeast(1) ?: 30)
+    }
 
-    fun stepWeek(delta: Int) { setWeek((effectiveWeek + delta).coerceIn(1, 30)) }
+    fun stepWeek(delta: Int) { setWeek((effectiveWeek + delta).coerceAtLeast(1)) }
 
     // ---------------------------------------------------------------- 动作
 
@@ -202,11 +194,6 @@ class MainViewModel(
         _toast.value = if (enabled) "提醒音效：奶龙捧腹大笑" else "提醒音效：系统默认"
     }
 
-    fun setUrls(kb: String, exam: String, grade: String) = safeLaunch {
-        repo.settings.setUrls(kb, exam, grade)
-        _toast.value = "抓取地址已保存"
-    }
-
     /**
      * 保存 AI 服务配置（设置 → AI 搜索）。
      *
@@ -259,50 +246,19 @@ class MainViewModel(
     /** 整份替换调休安排。改完必须重排提醒和静音 —— 补课日 / 放假日直接决定哪天上什么课。 */
     fun setDayOverrides(list: List<DayOverride>) = safeLaunch {
         repo.settings.setDayOverrides(list)
+        repo.refreshWidget()
         reminders.reschedule()
         silence.reschedule()
         _toast.value = if (list.isEmpty()) "已清空调休安排" else "调休安排已更新（${list.size} 条）"
     }
 
-    /** 悬浮底栏 / 原版底栏切换。 */
-    fun setFloatingBottomBar(enabled: Boolean) = safeLaunch {
-        repo.settings.setFloatingBottomBar(enabled)
-        _toast.value = if (enabled) "已切到悬浮底栏" else "已切回原版底栏"
-    }
-
-    /** 底栏的玻璃效果：无 / 高斯模糊。 */
-    fun setGlassEffect(effect: GlassEffect) = safeLaunch {
-        repo.settings.setGlassEffect(effect)
-        _toast.value = "底栏效果：${effect.label}"
-    }
-
-    /**
-     * 性能模式。
-     *
-     * 打开 = 底栏玻璃强制降级为纯色：不把整屏录进 GraphicsLayer、不实时模糊。
-     * 这是这个 App 唯一"每帧都在烧 GPU"的地方，低内存设备的默认值就是开。
-     */
-    fun setPerformanceMode(enabled: Boolean) = safeLaunch {
-        repo.settings.setPerformanceMode(enabled)
-        _toast.value = if (enabled) {
-            "性能模式已开：底栏改用纯色，不再实时模糊"
-        } else {
-            "性能模式已关：恢复底栏玻璃效果"
-        }
-    }
-
-    /** Material You 动态取色。只对 Material 3 风格生效。 */
     fun setDynamicColor(enabled: Boolean) = safeLaunch {
         repo.settings.setDynamicColor(enabled)
-        _toast.value = if (enabled) "已跟随壁纸取色" else "已用回内置配色"
+        repo.refreshWidget()
     }
 
-    /** 界面风格切换：只换配色 / 圆角 / 字体，界面结构不动。 */
-    fun setUiStyle(style: UiStyle) = safeLaunch {
-        repo.settings.setUiStyle(style)
-        // 小组件的颜色是渲染时套上去的，不重画就还停在旧风格
-        repo.refreshWidget()
-        _toast.value = "界面风格：${style.label}"
+    fun setTimetableWeekGrid(enabled: Boolean) = safeLaunch {
+        repo.settings.setTimetableWeekGrid(enabled)
     }
 
     /** 抓取完成后的入库。 */

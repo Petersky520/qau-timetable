@@ -10,7 +10,7 @@ import java.io.File
  *
  * ## 为什么这些要用单测钉住
  *
- * 这三项改动（延迟初始化、骨架屏三态、Baseline Profile）都是**性能/体验**改进，
+ * 这三项改动（延迟初始化、首屏加载三态、Baseline Profile）都是**性能/体验**改进，
  * 共同特点是：**改坏了也不会让任何功能报错**。
  *
  *   - `AppContainer` 改回同步构造 → 功能全对，只是启动慢几十毫秒
@@ -67,11 +67,11 @@ class BuildContractTest {
 
         assertTrue("MainViewModel 应暴露 timetableLoaded", vm.contains("timetableLoaded"))
         assertTrue("TimetableScreen 应读取 loaded 状态", screen.contains("vm.timetableLoaded"))
-        assertTrue("应有骨架屏分支", screen.contains("TimetableSkeleton"))
-        val loadingBranch = screen.indexOf("if (!loaded)")
-        val emptyBranch = screen.indexOf("EmptyTimetable(onSync)")
+        assertTrue("应有加载分支", screen.contains("TimetableLoadingState"))
+        val loadingBranch = screen.indexOf("if (!timetableLoaded)")
+        val emptyBranch = screen.indexOf("ExpressiveEmptyState(")
         assertTrue(
-            "骨架屏判断必须存在且在空状态之前（否则空状态仍会先闪）",
+            "加载判断必须存在且在空状态之前（否则空状态仍会先闪）",
             loadingBranch >= 0 && emptyBranch > loadingBranch,
         )
     }

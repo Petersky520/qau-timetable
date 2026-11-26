@@ -2,5 +2,7 @@
 <resources>
     <string name="app_name">青小农</string>
     <!-- 小组件选择器里显示的说明（Android 12 起生效） -->
-    <string name="widget_description">今日课程一目了然；今天没课时显示最近一次课。</string>
+    <string name="widget_description">显示课程时间、教室和节次。今天没课时显示下一次上课安排。</string>
+    <string name="widget_title_today">今日课程</string>
+    <string name="widget_initial_message">打开青小农查看课表</string>
 </resources>

@@ -1,21 +1,38 @@
 package cn.edu.qau.timetable.ui
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.activity.result.contract.ActivityResultContracts
 import android.provider.Settings
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.Button
@@ -24,7 +41,6 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,8 +58,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -56,69 +78,92 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import cn.edu.qau.timetable.core.Campus
 import cn.edu.qau.timetable.core.DayOverride
 import cn.edu.qau.timetable.core.DayOverrides
-import cn.edu.qau.timetable.core.GlassEffect
 import cn.edu.qau.timetable.core.SilenceMode
-import cn.edu.qau.timetable.core.UiStyle
 import cn.edu.qau.timetable.notify.RingerModeController
 import cn.edu.qau.timetable.notify.ScheduleStatus
+import cn.edu.qau.timetable.ui.motion.QauMotion
+import cn.edu.qau.timetable.ui.motion.motionOf
 import cn.edu.qau.timetable.util.CrashLogger
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-/**
- * 设置页。
- *
- * 这页「文本多、一打字就掉帧」，根因不在 TextField，而在重组作用域：
- * 原先 15 个输入框的 `remember { mutableStateOf }` 全挂在 `SettingsScreen` 函数体里，
- * 而整页是同一个 `Column(verticalScroll)`。任何一个字符变化都会让 `SettingsScreen`
- * 整体失效 —— 10 张卡全部重跑（重新读 MaterialTheme、重建 FilterChip 行、重建
- * TextField 装饰、重新格式化字符串），一帧里做完这些自然掉帧。
- *
- * 现在每张卡都是独立 composable，输入草稿状态用 `remember` 关在卡内部，
- * `AppSettings` 也由卡自己 `collectAsState` 订阅。于是：敲字只让那一张卡重组；
- * 保存设置后 AppSettings 变了，也只影响真正读它的卡。
- *
- * 这个函数体因此只剩下布局，不再持有任何状态 —— 它自己几乎不会重组，
- * 这是整页打字流畅的关键，别再往这里加 `mutableStateOf`。
- */
 @Composable
-fun SettingsScreen(vm: MainViewModel, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .navigationBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+fun SettingsScreen(
+    vm: MainViewModel,
+    modifier: Modifier = Modifier,
+    openAdvanced: Boolean = false,
+) {
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = if (openAdvanced) 4 else 0)
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        state = listState,
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        ExpressiveIntro("偏好设置", "按你的习惯来", "从校园作息到界面外观，打造自己的课表。", Icons.Filled.Tune)
-        SectionLabel("校园与外观")
-        CampusCard(vm)
-        AppearanceCard(vm)
-        SectionLabel("课表与日程")
-        TermCard(vm)
-        OverridesCard(vm)
-        SectionLabel("提醒与静音")
-        ReminderCard(vm)
-        SilenceCard(vm)
-        SectionLabel("同步与连接")
-        UrlsCard(vm)
-        // AI 搜索只服务于考研模块（选校问答）。Lite 版没有考研，
-        // 留着这张卡只会让人填了密钥却找不到用处。
-        if (KaoyanFeature.hasKaoyan) AiCard(vm)
-        SectionLabel("关于与反馈")
-        CrashLogCard()
-        AboutCard()
+        item(key = "appearance") { AppearanceCard(vm) }
+        item(key = "campus") { CampusCard(vm) }
+        item(key = "schedule") {
+            SettingsGroup("学期与调休", "开学日期、学期周数与补课安排") {
+                TermCard(vm)
+                OverridesCard(vm)
+            }
+        }
+        item(key = "notifications") {
+            SettingsGroup("提醒与静音", "上课通知与自动静音") {
+                ReminderCard(vm)
+                SilenceCard(vm)
+            }
+        }
+        item(key = "advanced") {
+            val subtitle = if (KaoyanFeature.hasKaoyan) "考研 AI 与运行日志" else "运行日志"
+            SettingsGroup("高级设置", subtitle, initiallyExpanded = openAdvanced) {
+                if (KaoyanFeature.hasKaoyan) AiCard(vm)
+                CrashLogCard()
+            }
+        }
+        item(key = "about") { AboutCard() }
     }
 }
 
-/**
- * 校区卡。
- *
- * 单独拆出来的理由：它的状态只有 `settings.campus` 一项，跟文本输入毫无关系。
- * 拆开之后，在「学期」「抓取地址」里敲字，这张卡连组合都不会进。
- */
+@Composable
+private fun SettingsGroup(
+    title: String,
+    subtitle: String,
+    initiallyExpanded: Boolean = false,
+    content: @Composable () -> Unit,
+) {
+    var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
+    val rotation by animateFloatAsState(
+        if (expanded) 180f else 0f, motionOf(QauMotion.SpatialFast), label = "Settings group",
+    )
+    val layout = motionOf(QauMotion.LayoutFast)
+    val fade = motionOf(QauMotion.Effects)
+    val fadeFast = motionOf(QauMotion.EffectsFast)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Card(shape = MaterialTheme.shapes.large) {
+            ListItem(
+                headlineContent = { Text(title, style = MaterialTheme.typography.titleMedium) },
+                supportingContent = { Text(subtitle) },
+                trailingContent = {
+                    Icon(Icons.Filled.ExpandMore, null, Modifier.rotate(rotation))
+                },
+                colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                modifier = Modifier
+                    .clickable(role = Role.Button) { expanded = !expanded }
+                    .semantics { stateDescription = if (expanded) "已展开" else "已收起" },
+            )
+        }
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(layout) + fadeIn(fade),
+            exit = shrinkVertically(layout) + fadeOut(fadeFast),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { content() }
+        }
+    }
+}
+
 @Composable
 private fun CampusCard(vm: MainViewModel) {
     val settings by vm.settings.collectAsState()
@@ -146,132 +191,33 @@ private fun CampusCard(vm: MainViewModel) {
     }
 }
 
-/**
- * 外观卡（界面风格 / 动态取色 / 底栏 / 性能模式）。
- *
- * 单独拆出来的理由：这一块是设置页里最「贵」的一卡 —— 5 组 FilterChip + 3 个
- * Switch + 一串依赖系统版本的条件文案。它没有任何输入框，把它挪出 `SettingsScreen`
- * 之后，打字时它不会被重建。
- */
 @Composable
 private fun AppearanceCard(vm: MainViewModel) {
     val settings by vm.settings.collectAsState()
-
-    Card(
-        Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-    ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("外观", style = MaterialTheme.typography.titleSmall)
-
-            Text("界面风格", style = MaterialTheme.typography.bodyMedium)
-            Text(settings.uiStyle.description, style = MaterialTheme.typography.labelSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                UiStyle.entries.forEach { s ->
-                    FilterChip(
-                        selected = settings.uiStyle == s,
-                        onClick = { vm.setUiStyle(s) },
-                        label = { Text(s.label) },
-                    )
-                }
-            }
-
-            val m3 = settings.uiStyle == UiStyle.MATERIAL3
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("跟随壁纸取色", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        when {
-                            !m3 -> "MIUI X 用固定配色，这一项对它不生效。"
-
-                            android.os.Build.VERSION.SDK_INT >=
-                                android.os.Build.VERSION_CODES.S ->
-                                "Material You 动态取色，配色由手机壁纸决定。"
-
-                            else ->
-                                "需要 Android 12 及以上；当前系统不支持，将使用内置配色。"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
-                Switch(
-                    checked = settings.dynamicColor && m3,
-                    enabled = m3,
-                    onCheckedChange = { vm.setDynamicColor(it) },
-                )
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("悬浮底栏", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        if (settings.floatingBottomBar) "浮在内容之上" else "通栏贴底",
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
-                Switch(
-                    checked = settings.floatingBottomBar,
-                    onCheckedChange = { vm.setFloatingBottomBar(it) },
-                )
-            }
-
-            Text("底栏效果", style = MaterialTheme.typography.bodyMedium)
-            Text(
-                when (settings.glassEffect) {
-                    GlassEffect.NONE -> "不透明"
-                    GlassEffect.GAUSSIAN -> "把背后内容糊成磨砂玻璃"
-                },
-                style = MaterialTheme.typography.labelSmall,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GlassEffect.entries.forEach { e ->
-                    FilterChip(
-                        selected = settings.glassEffect == e,
-                        onClick = { vm.setGlassEffect(e) },
-                        label = { Text(e.label) },
-                    )
-                }
-            }
-            if (!settings.floatingBottomBar && settings.glassEffect.blursBackdrop) {
+    val supported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    Card(shape = MaterialTheme.shapes.extraLarge) {
+        ListItem(
+            headlineContent = { Text("跟随壁纸取色", style = MaterialTheme.typography.titleMedium) },
+            supportingContent = {
                 Text(
-                    "选了模糊，底栏会浮起来让内容从底下穿过",
-                    style = MaterialTheme.typography.labelSmall,
+                    when {
+                        !supported -> "Android 12 及以上可用"
+                        settings.dynamicColor -> "应用与桌面小部件使用系统动态配色"
+                        else -> "应用与桌面小部件使用青小农配色"
+                    },
                 )
-            }
-
-            HorizontalDivider(Modifier.padding(vertical = 2.dp))
-
-            // ------------------------------------------------- 性能模式
-            //
-            // 一个开关换掉"每帧整屏录屏 + 实时高斯模糊"。低内存设备默认就开着
-            // （SettingsStore 用 ActivityManager.isLowRamDevice 判断）。
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("性能模式", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        if (settings.performanceMode) {
-                            "已开启：底栏改用纯色，不再实时模糊。滚动更跟手，也更省电。"
-                        } else {
-                            "关着：底栏实时模糊背后内容。低端机上滚动可能掉帧就开这个。"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                    if (settings.performanceMode && settings.glassEffect.blursBackdrop) {
-                        // 用户选了模糊但被性能模式压平 —— 必须说清楚，
-                        // 否则他会以为「底栏效果」那颗 chip 坏了。
-                        Text(
-                            "开着性能模式时，「底栏效果」选的模糊不会生效，会以纯色显示。",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-                Switch(
-                    checked = settings.performanceMode,
-                    onCheckedChange = { vm.setPerformanceMode(it) },
-                )
-            }
-        }
+            },
+            trailingContent = {
+                Switch(checked = supported && settings.dynamicColor, onCheckedChange = null, enabled = supported)
+            },
+            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            modifier = Modifier.toggleable(
+                value = supported && settings.dynamicColor,
+                enabled = supported,
+                role = Role.Switch,
+                onValueChange = vm::setDynamicColor,
+            ),
+        )
     }
 }
 
@@ -455,6 +401,24 @@ private fun OverridesCard(vm: MainViewModel) {
 @Composable
 private fun ReminderCard(vm: MainViewModel) {
     val settings by vm.settings.collectAsState()
+    val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    fun notificationsAllowed() = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+        PackageManager.PERMISSION_GRANTED
+
+    var notificationGranted by remember { mutableStateOf(notificationsAllowed()) }
+    val requestNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        notificationGranted = it
+    }
+    DisposableEffect(lifecycle, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) notificationGranted = notificationsAllowed()
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+
 
     var remindEnabled by remember(settings.remindEnabled) {
         mutableStateOf(settings.remindEnabled)
@@ -480,10 +444,14 @@ private fun ReminderCard(vm: MainViewModel) {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            Text(
-                "只排未来 7 天的闹钟；开机或导入课表后会自动重排。",
-                style = MaterialTheme.typography.labelSmall,
-            )
+            if (remindEnabled && !notificationGranted) {
+                Text("开启系统通知后才能收到上课提醒。", style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = {
+                    context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    })
+                }) { Text("打开通知设置") }
+            }
             // 音效开关。
             //
             // 单独一行而不是塞进上面那个「保存提醒设置」按钮：音效是**立即生效**的
@@ -513,6 +481,9 @@ private fun ReminderCard(vm: MainViewModel) {
                     enabled = remindEnabled,
                     minutesBefore = remindMinutes.toIntOrNull()?.coerceIn(1, 120) ?: 15,
                 )
+                if (remindEnabled && !notificationGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
             }) { Text("保存提醒设置") }
         }
     }
@@ -624,60 +595,6 @@ private fun SilenceCard(vm: MainViewModel) {
     }
 }
 
-/**
- * 教务系统抓取地址卡。
- *
- * 单独拆出来的理由：三个长 URL 输入框是这页最长的文本，敲键盘时最费帧。
- * 状态关在卡内，敲一个字只重组这三行输入框，不再带着整页 10 张卡一起跑。
- */
-@Composable
-private fun UrlsCard(vm: MainViewModel) {
-    val settings by vm.settings.collectAsState()
-
-    var kbUrl by remember(settings.kbUrl) { mutableStateOf(settings.kbUrl) }
-    var examUrl by remember(settings.examUrl) { mutableStateOf(settings.examUrl) }
-    var gradeUrl by remember(settings.gradeUrl) { mutableStateOf(settings.gradeUrl) }
-
-    Card(
-        Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-    ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("教务系统抓取地址", style = MaterialTheme.typography.titleSmall)
-            Text(
-                "默认是强智 jsxsd 的常见路径。如果抓不到，可以登录后在浏览器里" +
-                    "打开对应页面，把地址栏的 URL 粘到这里。",
-                style = MaterialTheme.typography.labelSmall,
-            )
-            OutlinedTextField(
-                value = kbUrl, onValueChange = { kbUrl = it },
-                label = { Text("课表页") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = examUrl, onValueChange = { examUrl = it },
-                label = { Text("考试安排页") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = gradeUrl, onValueChange = { gradeUrl = it },
-                label = { Text("成绩页") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Button(onClick = {
-                vm.setUrls(kbUrl.trim(), examUrl.trim(), gradeUrl.trim())
-            }) { Text("保存地址") }
-        }
-    }
-}
-
-/**
- * AI 搜索卡。
- *
- * 单独拆出来的理由：4 个输入框（其中密钥框还带密码样式）+ 两条独立保存路径，
- * 是这页文本输入最密集的一块。草稿状态关在卡内，填密钥时不会让提醒/静音/调休
- * 那几张卡跟着重组 —— 顺带也让密钥只在这张卡的组合里被读到。
- */
 @Composable
 private fun AiCard(vm: MainViewModel) {
     val settings by vm.settings.collectAsState()
